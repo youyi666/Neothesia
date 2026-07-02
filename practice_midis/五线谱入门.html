@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>五线谱入门</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"微软雅黑","Microsoft YaHei",sans-serif; background:#fafafa; color:#222; }
+.page { max-width:900px; margin:0 auto; padding:30px 36px; background:#fff; }
+h1 { text-align:center; font-size:22px; letter-spacing:4px; margin-bottom:4px; }
+.subtitle { text-align:center; color:#888; font-size:13px; margin-bottom:24px; }
+h2 { font-size:15px; color:#333; margin:20px 0 10px; border-left:4px solid #7c5cbf; padding-left:10px; }
+h3 { font-size:14px; color:#444; margin:6px 0 4px; }
+
+.theory-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+.box { background:#f5f3fa; border-radius:8px; padding:14px 16px; font-size:12.5px; line-height:1.9; }
+.box h3 { color:#5a3d9e; margin-bottom:6px; font-size:13px; }
+.box svg { display:block; margin:6px auto; }
+
+.song-wrap { margin-bottom:18px; }
+.song-wrap svg { display:block; margin:4px 0; }
+.finger-tip { font-size:11px; color:#888; margin-top:4px; }
+
+.note-red { color:#e74c3c; font-weight:bold; }
+.note-blue { color:#2980b9; font-weight:bold; }
+
+@media print {
+  body { background:#fff; }
+  .page { padding:12mm 14mm; max-width:none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>五线谱入门手册</h1>
+<div class="subtitle">右手入门 · 配合 Yamaha P-48 · 对照 Neothesia 使用</div>
+
+<!-- ====== 理论知识 ====== -->
+<h2>一、基础知识</h2>
+<div class="theory-grid">
+
+  <div class="box">
+    <h3>📋 五线谱结构</h3>
+    <svg width="240" height="80" viewBox="0 0 240 80">
+      <!-- 5条线 -->
+      <line x1="30" x2="220" y1="15" y2="15" stroke="#333" stroke-width="1.2"/>
+      <line x1="30" x2="220" y1="27" y2="27" stroke="#333" stroke-width="1.2"/>
+      <line x1="30" x2="220" y1="39" y2="39" stroke="#333" stroke-width="1.2"/>
+      <line x1="30" x2="220" y1="51" y2="51" stroke="#333" stroke-width="1.2"/>
+      <line x1="30" x2="220" y1="63" y2="63" stroke="#333" stroke-width="1.2"/>
+      <!-- 标注 -->
+      <text x="225" y="19" font-size="10" fill="#777">第5线</text>
+      <text x="225" y="31" font-size="10" fill="#777">第4线</text>
+      <text x="225" y="43" font-size="10" fill="#e74c3c">第3线(中)</text>
+      <text x="225" y="55" font-size="10" fill="#777">第2线</text>
+      <text x="225" y="67" font-size="10" fill="#777">第1线</text>
+      <text x="2" y="23" font-size="9" fill="#aaa">间</text>
+      <text x="2" y="35" font-size="9" fill="#aaa">间</text>
+      <text x="2" y="47" font-size="9" fill="#aaa">间</text>
+      <text x="2" y="59" font-size="9" fill="#aaa">间</text>
+    </svg>
+    从下往上，音越来越<b>高</b><br>
+    音符在线上 = 线音 ／ 在线间 = 间音<br>
+    线和间交替排列，共9个位置
+  </div>
+
+  <div class="box">
+    <h3>🎵 音符时值（几拍）</h3>
+    <svg width="240" height="70" viewBox="0 0 240 70">
+      <!-- 全音符 -->
+      <ellipse cx="30" cy="35" rx="9" ry="7" fill="white" stroke="#222" stroke-width="2"/>
+      <text x="30" y="54" text-anchor="middle" font-size="11" fill="#555">全音符</text>
+      <text x="30" y="66" text-anchor="middle" font-size="10" fill="#e74c3c">4拍</text>
+      <!-- 二分音符 -->
+      <ellipse cx="90" cy="35" rx="8" ry="6" fill="white" stroke="#222" stroke-width="1.8"/>
+      <line x1="97" y1="35" x2="97" y2="10" stroke="#222" stroke-width="1.5"/>
+      <text x="90" y="54" text-anchor="middle" font-size="11" fill="#555">二分音符</text>
+      <text x="90" y="66" text-anchor="middle" font-size="10" fill="#e74c3c">2拍</text>
+      <!-- 四分音符 -->
+      <ellipse cx="155" cy="35" rx="8" ry="6" fill="#222"/>
+      <line x1="162" y1="35" x2="162" y2="10" stroke="#222" stroke-width="1.5"/>
+      <text x="155" y="54" text-anchor="middle" font-size="11" fill="#555">四分音符</text>
+      <text x="155" y="66" text-anchor="middle" font-size="10" fill="#e74c3c">1拍</text>
+      <!-- 八分音符 -->
+      <ellipse cx="215" cy="35" rx="8" ry="6" fill="#222"/>
+      <line x1="222" y1="35" x2="222" y2="10" stroke="#222" stroke-width="1.5"/>
+      <path d="M222 10 Q235 16 228 24" stroke="#222" stroke-width="1.5" fill="none"/>
+      <text x="215" y="54" text-anchor="middle" font-size="11" fill="#555">八分音符</text>
+      <text x="215" y="66" text-anchor="middle" font-size="10" fill="#e74c3c">½拍</text>
+    </svg>
+  </div>
+
+  <div class="box">
+    <h3>🎼 高音谱号与低音谱号</h3>
+    <svg width="240" height="70" viewBox="0 0 240 70">
+      <!-- 上方：高音谱号（右手）-->
+      <line x1="60" x2="110" y1="8"  y2="8"  stroke="#333" stroke-width="1"/>
+      <line x1="60" x2="110" y1="17" y2="17" stroke="#333" stroke-width="1"/>
+      <line x1="60" x2="110" y1="26" y2="26" stroke="#333" stroke-width="1"/>
+      <line x1="60" x2="110" y1="35" y2="35" stroke="#333" stroke-width="1"/>
+      <line x1="60" x2="110" y1="44" y2="44" stroke="#333" stroke-width="1"/>
+      <text x="60" y="49" font-size="48" font-family="serif" fill="#5a3d9e">𝄞</text>
+      <text x="115" y="20" font-size="11" fill="#5a3d9e">高音谱号</text>
+      <text x="115" y="33" font-size="10" fill="#888">右手弹</text>
+      <text x="115" y="44" font-size="10" fill="#888">范围：中音区↑</text>
+      <!-- 中央C指示线 -->
+      <line x1="60" x2="110" y1="53" y2="53" stroke="#e74c3c" stroke-width="1" stroke-dasharray="3"/>
+      <text x="115" y="57" font-size="10" fill="#e74c3c">← 中央C（加线）</text>
+    </svg>
+    <b>高音谱号</b>（蜗牛形）= <span class="note-blue">右手</span><br>
+    <b>低音谱号</b>（F形）= <span class="note-red">左手</span>（后面再学）<br>
+    现在只看<b>高音谱号</b>就够了
+  </div>
+
+  <div class="box">
+    <h3>🖐 右手五指与音名</h3>
+    <svg width="240" height="68" viewBox="0 0 240 68">
+      <!-- 五线谱 -->
+      <line x1="10" x2="230" y1="18" y2="18" stroke="#ddd" stroke-width="1"/>
+      <line x1="10" x2="230" y1="28" y2="28" stroke="#ddd" stroke-width="1"/>
+      <line x1="10" x2="230" y1="38" y2="38" stroke="#ddd" stroke-width="1"/>
+      <line x1="10" x2="230" y1="48" y2="48" stroke="#ddd" stroke-width="1"/>
+      <line x1="10" x2="230" y1="58" y2="58" stroke="#333" stroke-width="1.2"/>
+      <!-- 五个音 C D E F G -->
+      <!-- C4 加线 -->
+      <line x1="22" x2="42" y1="68" y2="68" stroke="#333" stroke-width="1.2"/>
+      <ellipse cx="32" cy="68" rx="6" ry="4.5" fill="#e74c3c"/>
+      <text x="32" y="64" text-anchor="middle" font-size="9" fill="#e74c3c" font-weight="bold">C</text>
+      <!-- D4 -->
+      <ellipse cx="72" cy="63" rx="6" ry="4.5" fill="#e67e22"/>
+      <text x="72" y="59" text-anchor="middle" font-size="9" fill="#e67e22" font-weight="bold">D</text>
+      <!-- E4 on line 1 -->
+      <ellipse cx="112" cy="58" rx="6" ry="4.5" fill="#27ae60"/>
+      <text x="112" y="54" text-anchor="middle" font-size="9" fill="#27ae60" font-weight="bold">E</text>
+      <!-- F4 -->
+      <ellipse cx="152" cy="53" rx="6" ry="4.5" fill="#2980b9"/>
+      <text x="152" y="49" text-anchor="middle" font-size="9" fill="#2980b9" font-weight="bold">F</text>
+      <!-- G4 on line 2 -->
+      <ellipse cx="192" cy="48" rx="6" ry="4.5" fill="#8e44ad"/>
+      <text x="192" y="44" text-anchor="middle" font-size="9" fill="#8e44ad" font-weight="bold">G</text>
+      <!-- 手指编号 -->
+      <text x="32"  y="82" text-anchor="middle" font-size="10" fill="#e74c3c">①拇</text>
+      <text x="72"  y="82" text-anchor="middle" font-size="10" fill="#e67e22">②食</text>
+      <text x="112" y="82" text-anchor="middle" font-size="10" fill="#27ae60">③中</text>
+      <text x="152" y="82" text-anchor="middle" font-size="10" fill="#2980b9">④无名</text>
+      <text x="192" y="82" text-anchor="middle" font-size="10" fill="#8e44ad">⑤小</text>
+    </svg>
+    五指从不离位，音符从下往上 = 从左到右<br>
+    <b>C4</b>需要加线（在谱子下方单独一条短线）
+  </div>
+
+</div>
+
+<!-- ====== 音符位置总图 ====== -->
+<h2>二、右手音符位置全图（C4 到 A4）</h2>
+<div id="noteChart"></div>
+
+<!-- ====== 小星星 ====== -->
+<h2>三、小星星（Twinkle Twinkle Little Star）</h2>
+<p style="font-size:12px;color:#888;margin-bottom:8px">简谱：1 1 5 5 6 6 5 — ／ 4 4 3 3 2 2 1 —　　空心音符=2拍，实心=1拍</p>
+<div id="twinkle" class="song-wrap"></div>
+
+<!-- ====== 欢乐颂 ====== -->
+<h2>四、欢乐颂（Ode to Joy）</h2>
+<p style="font-size:12px;color:#888;margin-bottom:8px">简谱：3 3 4 5 5 4 3 2 ／ 1 1 2 3 3 2 2 —　　从第1线(E)开始</p>
+<div id="ode" class="song-wrap"></div>
+
+<div style="margin-top:24px;font-size:11.5px;color:#999;border-top:1px solid #eee;padding-top:12px;text-align:center">
+  看谱方法：先找到最低那条线 = E（中指）→ 往上数位置 → 对应手指按键<br>
+  遇到C4（加线音）= 大拇指按中央C
+</div>
+
+</div><!-- .page -->
+
+<script>
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// 五线谱参数
+const LS = 12;       // 线间距
+const ST = 35;       // 第5线y坐标
+// 五条线 y: 35 47 59 71 83（第5到第1）
+const LINE_Y = [35, 47, 59, 71, 83];
+
+// 音符y坐标（C4最低=95，往上每步6px）
+const NOTE_Y = {
+  'C4':95,'D4':89,'E4':83,'F4':77,'G4':71,'A4':65,'B4':59,'C5':53,'D5':47
+};
+const NOTE_NAME = {
+  'C4':'C','D4':'D','E4':'E','F4':'F','G4':'G','A4':'A','B4':'B','C5':'C','D5':'D'
+};
+const FINGER = {
+  'C4':'①','D4':'②','E4':'③','F4':'④','G4':'⑤','A4':'','B4':'','C5':'','D5':''
+};
+const FINGER_COLOR = {
+  'C4':'#e74c3c','D4':'#e67e22','E4':'#27ae60','F4':'#2980b9','G4':'#8e44ad',
+  'A4':'#666','B4':'#666','C5':'#666','D5':'#666'
+};
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function drawRow(notes, showClef) {
+  const NS = 46;   // 音符间距
+  const CW = showClef ? 68 : 20;
+  const W  = CW + notes.length * NS + 24;
+  const H  = 120;
+
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('width',  W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // 五条线
+  for (const y of LINE_Y) {
+    el('line',{x1:10,x2:W-10,y1:y,y2:y,stroke:'#444','stroke-width':'1.2'}, svg);
+  }
+
+  // 谱号
+  if (showClef) {
+    const t = el('text',{x:'8',y:'90','font-size':'70','font-family':'serif',fill:'#333'}, svg);
+    t.textContent = '𝄞';
+    // 4/4拍号
+    const t1 = el('text',{x:'54',y:'52','font-size':'15','font-family':'serif','font-weight':'bold',fill:'#333'}, svg);
+    t1.textContent = '4';
+    const t2 = el('text',{x:'54',y:'67','font-size':'15','font-family':'serif','font-weight':'bold',fill:'#333'}, svg);
+    t2.textContent = '4';
+  }
+
+  notes.forEach((note, i) => {
+    const x = CW + i * NS + NS/2;
+    const y = NOTE_Y[note.n];
+    const dur = note.d || 'q';
+    const col = FINGER_COLOR[note.n];
+
+    // 小节线（每4拍之后）
+    if (i > 0 && i % 4 === 0) {
+      el('line',{
+        x1: x - NS/2, x2: x - NS/2,
+        y1: LINE_Y[0], y2: LINE_Y[4],
+        stroke:'#555','stroke-width':'1.5'
+      }, svg);
+    }
+
+    // C4加线
+    if (note.n === 'C4') {
+      el('line',{x1:x-11,x2:x+11,y1:95,y2:95,stroke:'#444','stroke-width':'1.5'}, svg);
+    }
+
+    // 音符头
+    const filled = (dur === 'q');
+    el('ellipse',{
+      cx:x, cy:y, rx:6, ry:4.6,
+      fill: filled ? col : 'white',
+      stroke: col,
+      'stroke-width': filled ? 0 : 2
+    }, svg);
+
+    // 符干（C4-A4 stem向上，B4以上 stem向下）
+    if (dur !== 'w') {
+      const stemUp = y >= 65;
+      el('line', stemUp
+        ? {x1:x+5,x2:x+5,y1:y,y2:y-30,stroke:'#444','stroke-width':1.5}
+        : {x1:x-5,x2:x-5,y1:y,y2:y+30,stroke:'#444','stroke-width':1.5},
+        svg);
+    }
+
+    // 音名标签
+    const lbl = el('text',{
+      x:x, y:107, 'text-anchor':'middle',
+      'font-size':'11','font-family':'Arial,sans-serif', fill:col, 'font-weight':'bold'
+    }, svg);
+    lbl.textContent = NOTE_NAME[note.n] || note.n;
+
+    // 手指编号
+    const fn = FINGER[note.n];
+    if (fn) {
+      const fl = el('text',{
+        x:x, y:119, 'text-anchor':'middle',
+        'font-size':'10','font-family':'Arial,sans-serif', fill:'#aaa'
+      }, svg);
+      fl.textContent = fn;
+    }
+  });
+
+  // 终止线
+  const endX = CW + notes.length * NS;
+  el('line',{x1:endX-1,x2:endX-1,y1:LINE_Y[0],y2:LINE_Y[4],stroke:'#444','stroke-width':2}, svg);
+  el('line',{x1:endX+2,x2:endX+2,y1:LINE_Y[0],y2:LINE_Y[4],stroke:'#444','stroke-width':4}, svg);
+
+  return svg;
+}
+
+function renderSong(containerId, rows) {
+  const wrap = document.getElementById(containerId);
+  rows.forEach((row, i) => {
+    wrap.appendChild(drawRow(row, i === 0));
+  });
+}
+
+// ====== 音符位置图 ======
+function renderNoteChart() {
+  const notes = ['C4','D4','E4','F4','G4','A4'];
+  const labels = ['C（加线）','D','E（第1线）','F','G（第2线）','A'];
+  const W = 460, H = 120;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  for (const y of LINE_Y) {
+    el('line',{x1:10,x2:W-10,y1:y,y2:y,stroke:'#ccc','stroke-width':'1.2'}, svg);
+  }
+
+  notes.forEach((n, i) => {
+    const x = 48 + i * 68;
+    const y = NOTE_Y[n];
+    const col = FINGER_COLOR[n];
+
+    if (n === 'C4') {
+      el('line',{x1:x-12,x2:x+12,y1:95,y2:95,stroke:'#888','stroke-width':1.5}, svg);
+    }
+    el('ellipse',{cx:x,cy:y,rx:8,ry:6,fill:col}, svg);
+    const t = el('text',{x:x,y:y+1,'text-anchor':'middle','font-size':'10',fill:'white','font-weight':'bold'}, svg);
+    t.textContent = NOTE_NAME[n];
+
+    // 符干向上
+    el('line',{x1:x+7,x2:x+7,y1:y,y2:y-28,stroke:col,'stroke-width':1.5}, svg);
+
+    const l1 = el('text',{x:x,y:108,'text-anchor':'middle','font-size':'11',fill:col,'font-weight':'bold'}, svg);
+    l1.textContent = NOTE_NAME[n] + '4';
+    const l2 = el('text',{x:x,y:118,'text-anchor':'middle','font-size':'10',fill:'#aaa'}, svg);
+    l2.textContent = labels[i];
+  });
+
+  document.getElementById('noteChart').appendChild(svg);
+}
+
+// ====== 小星星 ======
+const q = 'q', h = 'h';
+const twinkleRows = [
+  // 第1行：1 1 5 5 6 6 5(半)
+  [
+    {n:'C4',d:q},{n:'C4',d:q},{n:'G4',d:q},{n:'G4',d:q},
+    {n:'A4',d:q},{n:'A4',d:q},{n:'G4',d:h}
+  ],
+  // 第2行：4 4 3 3 2 2 1(半)
+  [
+    {n:'F4',d:q},{n:'F4',d:q},{n:'E4',d:q},{n:'E4',d:q},
+    {n:'D4',d:q},{n:'D4',d:q},{n:'C4',d:h}
+  ]
+];
+
+// ====== 欢乐颂 ======
+const odeRows = [
+  // 第1行：3 3 4 5 5 4 3 2
+  [
+    {n:'E4',d:q},{n:'E4',d:q},{n:'F4',d:q},{n:'G4',d:q},
+    {n:'G4',d:q},{n:'F4',d:q},{n:'E4',d:q},{n:'D4',d:q}
+  ],
+  // 第2行：1 1 2 3 3 2 2(半)
+  [
+    {n:'C4',d:q},{n:'C4',d:q},{n:'D4',d:q},{n:'E4',d:q},
+    {n:'E4',d:q},{n:'D4',d:q},{n:'D4',d:h}
+  ]
+];
+
+renderNoteChart();
+renderSong('twinkle', twinkleRows);
+renderSong('ode', odeRows);
+</script>
+</body>
+</html>

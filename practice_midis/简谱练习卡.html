@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>钢琴简谱练习卡</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "微软雅黑", "Microsoft YaHei", sans-serif;
+    background: #fff;
+    color: #222;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 14mm 16mm;
+    margin: 0 auto;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 20px;
+    letter-spacing: 4px;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 10px;
+  }
+
+  .finger-guide {
+    background: #f5f5f5;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .finger-guide span {
+    white-space: nowrap;
+  }
+
+  .finger-guide b {
+    color: #333;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .song {
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .song h2 {
+    font-size: 14px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 4px;
+    color: #111;
+  }
+
+  .song .tag {
+    font-size: 10px;
+    color: #888;
+    float: right;
+    font-weight: normal;
+    margin-top: 2px;
+  }
+
+  .notes {
+    font-family: "Courier New", monospace;
+    font-size: 15px;
+    line-height: 2;
+    letter-spacing: 3px;
+    color: #222;
+  }
+
+  .notes .row {
+    display: block;
+  }
+
+  .dash { color: #aaa; }
+
+  .tip {
+    margin-top: 12px;
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .page { padding: 10mm 12mm; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>🎹 钢琴简谱练习卡</h1>
+  <div class="subtitle">右手入门 · 五指不离位 · 打印后对照琴键练习</div>
+
+  <div class="finger-guide">
+    <span>拇指 <b>1 = C</b></span>
+    <span>食指 <b>2 = D</b></span>
+    <span>中指 <b>3 = E</b></span>
+    <span>无名指 <b>4 = F</b></span>
+    <span>小指 <b>5 = G</b></span>
+    <span style="color:#aaa">｜ — = 延长，不按新键</span>
+  </div>
+
+  <div class="grid">
+
+    <div class="song">
+      <h2>小星星 <span class="tag">⭐ 第一首</span></h2>
+      <div class="notes">
+        <span class="row">1 1 5 5 6 6 5 <span class="dash">—</span></span>
+        <span class="row">4 4 3 3 2 2 1 <span class="dash">—</span></span>
+        <span class="row">5 5 4 4 3 3 2 <span class="dash">—</span></span>
+        <span class="row">5 5 4 4 3 3 2 <span class="dash">—</span></span>
+        <span class="row">1 1 5 5 6 6 5 <span class="dash">—</span></span>
+        <span class="row">4 4 3 3 2 2 1 <span class="dash">—</span></span>
+      </div>
+    </div>
+
+    <div class="song">
+      <h2>欢乐颂 <span class="tag">⭐ 第二首</span></h2>
+      <div class="notes">
+        <span class="row">3 3 4 5 5 4 3 2</span>
+        <span class="row">1 1 2 3 3 2 2 <span class="dash">—</span></span>
+        <span class="row">3 3 4 5 5 4 3 2</span>
+        <span class="row">1 1 2 3 2 1 1 <span class="dash">—</span></span>
+      </div>
+    </div>
+
+    <div class="song">
+      <h2>玛丽有只小羊羔 <span class="tag">⭐ 第三首</span></h2>
+      <div class="notes">
+        <span class="row">3 2 1 2 3 3 3 <span class="dash">—</span></span>
+        <span class="row">2 2 2 <span class="dash">—</span> 3 5 5 <span class="dash">—</span></span>
+        <span class="row">3 2 1 2 3 3 3 3</span>
+        <span class="row">2 2 3 2 1 <span class="dash">— — —</span></span>
+      </div>
+    </div>
+
+    <div class="song">
+      <h2>两只老虎 <span class="tag">⭐ 第四首</span></h2>
+      <div class="notes">
+        <span class="row">1 2 3 1  1 2 3 1</span>
+        <span class="row">3 4 5 <span class="dash">—</span>  3 4 5 <span class="dash">—</span></span>
+        <span class="row">5 6 5 4 3 1  5 6 5 4 3 1</span>
+        <span class="row">1 5 1 <span class="dash">—</span>  1 5 1 <span class="dash">—</span></span>
+      </div>
+    </div>
+
+    <div class="song">
+      <h2>送别 <span class="tag">⭐⭐ 进阶</span></h2>
+      <div class="notes">
+        <span class="row">5 3 5 6 5 <span class="dash">—</span> 3 <span class="dash">—</span></span>
+        <span class="row">2 <span class="dash">—</span> 2 3 2 1 2 <span class="dash">—</span></span>
+        <span class="row">5 3 5 6 5 <span class="dash">— —</span> 1</span>
+        <span class="row">6 5 3 2 1 <span class="dash">— — —</span></span>
+      </div>
+    </div>
+
+    <div class="song">
+      <h2>音阶练习 <span class="tag">每日必练</span></h2>
+      <div class="notes">
+        <span class="row" style="color:#555;font-size:12px;letter-spacing:1px;line-height:1.8">上行：</span>
+        <span class="row">1 2 3 4 5 4 3 2 1</span>
+        <span class="row" style="color:#555;font-size:12px;letter-spacing:1px;line-height:1.8;margin-top:4px">反复 3 遍，慢速，手腕放松</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tip">
+    数字 = 手指编号 = 音名 · 每个数字占一拍 · 慢慢数拍子弹 · 弹错不停，弹完再回头
+  </div>
+
+</div>
+</body>
+</html>
