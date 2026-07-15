@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>钢琴练习手册</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"微软雅黑","Microsoft YaHei",sans-serif; font-size:13px; color:#222; background:#fff; }
+
+.page {
+  width:210mm;
+  padding:12mm 14mm;
+  margin:0 auto;
+}
+
+h1 { font-size:20px; text-align:center; letter-spacing:3px; margin-bottom:3px; }
+.sub { text-align:center; color:#888; font-size:11px; margin-bottom:14px; }
+
+/* 分区标题 */
+.sec { font-size:13px; font-weight:bold; color:#fff; background:#5a3d9e;
+       padding:4px 10px; border-radius:4px; margin:12px 0 8px; display:inline-block; }
+
+/* 一周计划表 */
+table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:4px; }
+th { background:#ede8f8; color:#5a3d9e; padding:5px 8px; text-align:left; border:1px solid #d5cef0; }
+td { padding:5px 8px; border:1px solid #e8e8e8; vertical-align:top; line-height:1.6; }
+tr:nth-child(even) td { background:#faf9ff; }
+.day { font-weight:bold; color:#5a3d9e; white-space:nowrap; }
+.rest { color:#aaa; font-style:italic; }
+
+/* 简谱区 */
+.songs { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.song { border:1.5px solid #e0d8f5; border-radius:7px; padding:9px 11px; }
+.song h3 { font-size:12.5px; color:#5a3d9e; margin-bottom:5px; border-bottom:1px solid #ede8f8; padding-bottom:3px; }
+.song .tag { font-size:10px; color:#aaa; font-weight:normal; float:right; }
+.notes { font-family:"Courier New",monospace; font-size:14px;
+         letter-spacing:3px; line-height:2.1; color:#222; }
+.notes .row { display:block; }
+.d { color:#bbb; }
+
+/* 指法说明 */
+.fingers { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.finger { padding:4px 10px; border-radius:20px; font-size:12px; font-weight:bold; color:#fff; }
+.f1{background:#e74c3c;} .f2{background:#e67e22;} .f3{background:#27ae60;}
+.f4{background:#2980b9;} .f5{background:#8e44ad;}
+
+/* 技巧提示 */
+.tips { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.tip { background:#f8f7ff; border-radius:6px; padding:8px 10px; font-size:11.5px; line-height:1.8; }
+.tip b { color:#5a3d9e; display:block; margin-bottom:2px; }
+
+/* Neothesia快捷键 */
+.keys { display:flex; gap:8px; flex-wrap:wrap; font-size:11.5px; }
+.key { background:#333; color:#fff; padding:3px 8px; border-radius:4px; font-family:monospace; }
+.key span { color:#aaa; font-family:"微软雅黑",sans-serif; margin-left:4px; font-size:10px; }
+
+.footer { margin-top:14px; text-align:center; font-size:10px; color:#bbb; border-top:1px solid #eee; padding-top:8px; }
+
+@media print {
+  body { background:#fff; }
+  .page { padding:8mm 10mm; width:auto; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>🎹 钢琴练习手册</h1>
+<div class="sub">Yamaha P-48 + Neothesia · 右手入门阶段</div>
+
+<!-- 指法 -->
+<div class="sec">手指对应</div>
+<div class="fingers">
+  <div class="finger f1">① 拇指 = C</div>
+  <div class="finger f2">② 食指 = D</div>
+  <div class="finger f3">③ 中指 = E</div>
+  <div class="finger f4">④ 无名指 = F</div>
+  <div class="finger f5">⑤ 小指 = G</div>
+</div>
+
+<!-- 一周计划 -->
+<div class="sec">本周训练计划</div>
+<table>
+  <tr>
+    <th>Day</th>
+    <th>练习内容</th>
+    <th>目标</th>
+  </tr>
+  <tr>
+    <td class="day">Day 1</td>
+    <td>雅克兄弟 + Au Clair，速度降到 60%，各 5 遍</td>
+    <td>跟完不断，允许慢</td>
+  </tr>
+  <tr>
+    <td class="day">Day 2</td>
+    <td>同上两首升至 80% 速度；欢乐颂 + 玛丽各 1 遍热身</td>
+    <td>节奏变化处不乱</td>
+  </tr>
+  <tr>
+    <td class="day">Day 3</td>
+    <td>五首全部各跑 1 遍；然后闭眼弹小星星</td>
+    <td>小星星完全脱离屏幕</td>
+  </tr>
+  <tr>
+    <td class="day">Day 4</td>
+    <td class="rest">休息 / 只弹小星星 1 遍（10 分钟以内）</td>
+    <td class="rest">让手指消化</td>
+  </tr>
+  <tr>
+    <td class="day">Day 5</td>
+    <td>雅克兄弟 + Au Clair 正常速度；小星星不看屏幕</td>
+    <td>两首不卡住</td>
+  </tr>
+  <tr>
+    <td class="day">Day 6</td>
+    <td>五首正常速度全部过一遍</td>
+    <td>全部顺畅 → Lv.1 过关！开始双手</td>
+  </tr>
+  <tr>
+    <td class="day">Day 7</td>
+    <td class="rest">休息</td>
+    <td class="rest">—</td>
+  </tr>
+</table>
+
+<!-- 简谱 -->
+<div class="sec">简谱速查（数字 = 手指编号 = 音名）</div>
+<div class="songs">
+
+  <div class="song">
+    <h3>小星星 <span class="tag">✅ 已背诵</span></h3>
+    <div class="notes">
+      <span class="row">1 1 5 5 6 6 5 <span class="d">—</span></span>
+      <span class="row">4 4 3 3 2 2 1 <span class="d">—</span></span>
+      <span class="row">5 5 4 4 3 3 2 <span class="d">—</span></span>
+      <span class="row">5 5 4 4 3 3 2 <span class="d">—</span></span>
+      <span class="row">1 1 5 5 6 6 5 <span class="d">—</span></span>
+      <span class="row">4 4 3 3 2 2 1 <span class="d">—</span></span>
+    </div>
+  </div>
+
+  <div class="song">
+    <h3>欢乐颂 <span class="tag">✅ 看谱熟练</span></h3>
+    <div class="notes">
+      <span class="row">3 3 4 5 5 4 3 2</span>
+      <span class="row">1 1 2 3 3 2 2 <span class="d">—</span></span>
+      <span class="row">3 3 4 5 5 4 3 2</span>
+      <span class="row">1 1 2 3 2 1 1 <span class="d">—</span></span>
+    </div>
+  </div>
+
+  <div class="song">
+    <h3>玛丽有只小羊羔 <span class="tag">✅ 看谱熟练</span></h3>
+    <div class="notes">
+      <span class="row">3 2 1 2 3 3 3 <span class="d">—</span></span>
+      <span class="row">2 2 2 <span class="d">—</span> 3 5 5 <span class="d">—</span></span>
+      <span class="row">3 2 1 2 3 3 3 3</span>
+      <span class="row">2 2 3 2 1 <span class="d">— — —</span></span>
+    </div>
+  </div>
+
+  <div class="song">
+    <h3>雅克兄弟（两只老虎）<span class="tag">🔥 练习中</span></h3>
+    <div class="notes">
+      <span class="row">1 2 3 1  1 2 3 1</span>
+      <span class="row">3 4 5 <span class="d">—</span>  3 4 5 <span class="d">—</span></span>
+      <span class="row">5 6 5 4 3 1</span>
+      <span class="row">5 6 5 4 3 1</span>
+      <span class="row">1 5 1 <span class="d">—</span>  1 5 1 <span class="d">—</span></span>
+    </div>
+  </div>
+
+  <div class="song">
+    <h3>Au Clair de la Lune <span class="tag">🔥 练习中</span></h3>
+    <div class="notes">
+      <span class="row">1 1 1 2 3 <span class="d">—</span> 2 <span class="d">—</span></span>
+      <span class="row">1 3 2 2 1 <span class="d">— — —</span></span>
+      <span class="row">1 1 1 2 3 <span class="d">—</span> 2 <span class="d">—</span></span>
+      <span class="row">1 3 2 2 1 <span class="d">— — —</span></span>
+    </div>
+  </div>
+
+  <div class="song">
+    <h3>音阶练习 <span class="tag">每日必做</span></h3>
+    <div class="notes" style="font-size:13px">
+      <span class="row">1 2 3 4 5 4 3 2 1</span>
+    </div>
+    <div style="font-size:11px;color:#888;margin-top:6px;line-height:1.8">
+      反复 3 遍 · 极慢 · 手腕放松<br>
+      无名指独立抬起练习：5 分钟
+    </div>
+  </div>
+
+</div>
+
+<!-- 技巧 -->
+<div class="sec">练琴要点</div>
+<div class="tips">
+  <div class="tip">
+    <b>手型</b>
+    想象握乒乓球，手指微弯<br>
+    拇指用侧面肉垫按键，不用指甲<br>
+    手腕稍微抬起，不要塌腕
+  </div>
+  <div class="tip">
+    <b>节奏</b>
+    心里默数 1 2 3 4<br>
+    实心音符 = 1拍<br>
+    空心音符（—）= 2拍，要撑住
+  </div>
+  <div class="tip">
+    <b>遇到卡顿</b>
+    停下来，看清是哪根手指<br>
+    单独慢按那个音几次<br>
+    再从那一句开头重来
+  </div>
+  <div class="tip">
+    <b>每天节奏</b>
+    先音阶热身 3 遍<br>
+    再练当天曲目<br>
+    总计 20 分钟，不要超时
+  </div>
+</div>
+
+<!-- 快捷键 -->
+<div class="sec">Neothesia 快捷键</div>
+<div class="keys">
+  <div class="key">空格 <span>暂停/继续</span></div>
+  <div class="key">↓ <span>降低速度</span></div>
+  <div class="key">↑ <span>提高速度</span></div>
+  <div class="key">← <span>倒退</span></div>
+  <div class="key">→ <span>快进</span></div>
+  <div class="key">Tab <span>打开文件</span></div>
+</div>
+
+<div class="footer">
+  最终目标：花海（周杰伦）· 每天 20 分钟 · 坚持就是胜利
+</div>
+
+</div>
+</body>
+</html>

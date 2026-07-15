@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#6c3fc5">
+<title>🎹 练琴</title>
+<style>
+:root {
+  --bg: #f0ecfa;
+  --card: #fff;
+  --primary: #6c3fc5;
+  --primary-light: #ede8f8;
+  --text: #1a1a2e;
+  --muted: #888;
+  --border: #e4dff5;
+  --tab-h: 60px;
+  --hdr-h: 52px;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; }
+body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--bg); color:var(--text); }
+
+/* ── Layout ── */
+#root { display:flex; flex-direction:column; height:100%; }
+.hdr { height:var(--hdr-h); background:var(--primary); color:#fff; display:flex; align-items:center; padding:0 16px; flex-shrink:0; }
+.hdr-title { font-size:17px; font-weight:600; flex:1; }
+.hdr-back { font-size:22px; margin-right:10px; cursor:pointer; }
+.content { flex:1; overflow-y:auto; padding:14px 12px 8px; }
+.tab-bar { height:var(--tab-h); background:#fff; border-top:1px solid var(--border); display:flex; flex-shrink:0; }
+.tab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:11px; color:var(--muted); cursor:pointer; transition:color .2s; }
+.tab.active { color:var(--primary); }
+.tab .icon { font-size:22px; }
+
+/* ── Song list ── */
+.song-card { background:var(--card); border-radius:12px; padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.song-info { flex:1; }
+.song-title { font-size:16px; font-weight:600; margin-bottom:2px; }
+.song-sub { font-size:12px; color:var(--muted); }
+.song-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.level-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; }
+.lv1 { background:#ddeeff; color:#1a6fa8; }
+.lv2 { background:#d5f5e3; color:#1a7a43; }
+.lv3 { background:#fde8cc; color:#a05a00; }
+.lv4 { background:#fdd5d5; color:#a01a1a; }
+.lv5 { background:#fff3cc; color:#8a6200; }
+.prof-dot { width:10px; height:10px; border-radius:50%; }
+
+/* ── Proficiency colors ── */
+.p0 { background:#ddd; }
+.p1 { background:#f39c12; }
+.p2 { background:#3498db; }
+.p3 { background:#2ecc71; }
+
+/* ── Fullscreen sheet view ── */
+.sf-wrap {
+  position:fixed; top:0; left:0; width:100vw; height:100vh;
+  background:#fff; z-index:200; overflow:hidden;
+}
+.sf-inner {
+  display:flex; flex-direction:column;
+  width:100%; height:100%; overflow:hidden;
+}
+/* 竖屏时旋转90度 → 模拟横屏 */
+@media (orientation:portrait) {
+  .sf-inner {
+    width:100vh; height:100vw;
+    position:absolute;
+    top:calc(50vh - 50vw);
+    left:calc(50vw - 50vh);
+    transform:rotate(90deg);
+    transform-origin:center center;
+    overflow:hidden;
+  }
+}
+.sf-hdr {
+  height:40px; background:var(--primary); color:#fff;
+  display:flex; align-items:center; padding:0 10px;
+  flex-shrink:0; gap:8px;
+}
+.sf-hdr-back { font-size:22px; cursor:pointer; flex-shrink:0; }
+.sf-hdr-title { flex:1; font-size:14px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sf-hdr-hide { font-size:12px; background:rgba(255,255,255,.2); border-radius:12px; padding:3px 10px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+.sf-prof {
+  display:flex; gap:4px; padding:5px 8px;
+  background:var(--primary-light); flex-shrink:0;
+}
+.sf-prof-btn {
+  flex:1; text-align:center; padding:4px 2px;
+  border-radius:6px; font-size:10px; cursor:pointer;
+  border:2px solid transparent; transition:all .15s;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sf-prof-btn.sel { border-color:var(--primary); font-weight:700; }
+.pb0{background:#f5f5f5;color:#888}
+.pb1{background:#fef5e4;color:#a06800}
+.pb2{background:#eaf4fd;color:#1a5a8a}
+.pb3{background:#eafaf1;color:#1a6b3a}
+/* 隐藏控件时的浮动返回按钮 */
+.sf-float {
+  position:absolute; top:8px; left:8px; z-index:10;
+  background:rgba(108,63,197,.85); color:#fff;
+  border-radius:20px; padding:5px 12px; font-size:12px;
+  cursor:pointer; backdrop-filter:blur(4px);
+}
+.sf-body { flex:1; overflow:auto; padding:10px 14px; -webkit-overflow-scrolling:touch; position:relative; }
+.sheet-label { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+.sheet-row {
+  font-family:"Courier New",Courier,monospace;
+  font-size:20px; line-height:1.9; letter-spacing:4px;
+  white-space:nowrap; overflow-x:auto; display:block;
+  -webkit-overflow-scrolling:touch;
+}
+.sheet-row span.n1{color:#e74c3c}
+.sheet-row span.n2{color:#e07b39}
+.sheet-row span.n3{color:#27ae60}
+.sheet-row span.n4{color:#2475a8}
+.sheet-row span.n5{color:#7c5cbf}
+.sheet-row span.n6{color:#16a085}
+.sheet-row span.n7{color:#555}
+.sheet-row span.rest{color:#ccc;font-size:.8em}
+
+.finger-guide { display:flex; gap:6px; flex-wrap:wrap; padding:10px 14px; background:var(--primary-light); border-radius:10px; margin-bottom:12px; }
+.fg { font-size:11px; padding:3px 8px; border-radius:14px; color:#fff; font-weight:600; }
+.fg1{background:#e74c3c}.fg2{background:#e07b39}.fg3{background:#27ae60}.fg4{background:#2475a8}.fg5{background:#7c5cbf}
+
+.boss-card { background:linear-gradient(135deg,#6c3fc5,#a855f7); border-radius:16px; padding:20px; text-align:center; color:#fff; margin-bottom:12px; }
+.boss-card h3 { font-size:22px; margin-bottom:4px; }
+.boss-card p { font-size:13px; opacity:.85; }
+.locked-msg { font-size:14px; color:var(--muted); text-align:center; padding:20px; }
+
+/* ── Tasks ── */
+.week-header { font-size:13px; font-weight:700; color:var(--primary); margin-bottom:12px; }
+.day-card { background:var(--card); border-radius:12px; margin-bottom:8px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.day-header { padding:14px 16px; display:flex; align-items:center; cursor:pointer; }
+.day-num { width:36px; height:36px; border-radius:50%; background:var(--primary-light); color:var(--primary); font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center; margin-right:12px; flex-shrink:0; }
+.day-num.done-day { background:#d5f5e3; color:#1a7a43; }
+.day-num.rest-day { background:#f5f5f5; color:#aaa; }
+.day-info { flex:1; }
+.day-title { font-size:14px; font-weight:600; }
+.day-sub { font-size:12px; color:var(--muted); margin-top:1px; }
+.day-arrow { font-size:14px; color:var(--muted); transition:transform .2s; }
+.day-arrow.open { transform:rotate(90deg); }
+.day-tasks { padding:0 16px 12px; border-top:1px solid var(--border); display:none; }
+.day-tasks.open { display:block; }
+.task-item { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); cursor:pointer; }
+.task-item:last-child { border-bottom:none; }
+.task-check { width:22px; height:22px; border-radius:6px; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; transition:all .2s; }
+.task-check.checked { background:var(--primary); border-color:var(--primary); }
+.task-check.checked::after { content:'✓'; color:#fff; font-size:13px; font-weight:700; }
+.task-text { font-size:14px; line-height:1.5; }
+.task-text.done { color:var(--muted); text-decoration:line-through; }
+
+/* ── Landscape fullscreen ── */
+@media (orientation:landscape) {
+  .tab-bar { display:none; }
+  .hdr { height:42px; }
+  .sheet-row { font-size:32px; letter-spacing:8px; }
+  .content { padding:8px 10px; }
+}
+
+/* ── Section label ── */
+.section-lbl { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin:16px 0 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ═══════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════
+
+const PROF = [
+  { label:'未开始', cls:'pb0', dot:'p0', icon:'○' },
+  { label:'练习中', cls:'pb1', dot:'p1', icon:'🔥' },
+  { label:'看谱熟练', cls:'pb2', dot:'p2', icon:'✓' },
+  { label:'已背诵', cls:'pb3', dot:'p3', icon:'⭐' },
+];
+
+const SONGS = [
+  // ── Lv.1 单手 ──
+  {
+    id:'twinkle', title:'小星星', sub:'Twinkle Twinkle', level:1,
+    defaultProf: 3,
+    notation: { right:[
+      '1  1  5  5  6  6  5  —',
+      '4  4  3  3  2  2  1  —',
+      '5  5  4  4  3  3  2  —',
+      '5  5  4  4  3  3  2  —',
+      '1  1  5  5  6  6  5  —',
+      '4  4  3  3  2  2  1  —',
+    ]}
+  },
+  {
+    id:'ode', title:'欢乐颂', sub:'Ode to Joy', level:1,
+    defaultProf: 2,
+    notation: { right:[
+      '3  3  4  5  5  4  3  2',
+      '1  1  2  3  3  2  2  —',
+      '3  3  4  5  5  4  3  2',
+      '1  1  2  3  2  1  1  —',
+    ]}
+  },
+  {
+    id:'mary', title:'玛丽有只小羊羔', sub:'Mary Had a Little Lamb', level:1,
+    defaultProf: 2,
+    notation: { right:[
+      '3  2  1  2  3  3  3  —',
+      '2  2  2  —  3  5  5  —',
+      '3  2  1  2  3  3  3  3',
+      '2  2  3  2  1  —  —  —',
+    ]}
+  },
+  {
+    id:'frere', title:'雅克兄弟', sub:'两只老虎', level:1,
+    defaultProf: 1,
+    notation: { right:[
+      '1  2  3  1     1  2  3  1',
+      '3  4  5  —     3  4  5  —',
+      '5  6  5  4  3  1',
+      '5  6  5  4  3  1',
+      '1  5  1  —     1  5  1  —',
+    ]}
+  },
+  {
+    id:'auclair', title:'Au Clair de la Lune', sub:'月光下', level:1,
+    defaultProf: 1,
+    notation: { right:[
+      '1  1  1  2  3  —  2  —',
+      '1  3  2  2  1  —  —  —',
+      '1  1  1  2  3  —  2  —',
+      '1  3  2  2  1  —  —  —',
+    ]}
+  },
+
+  // ── Lv.2 双手 ──
+  {
+    id:'twinkle2', title:'小星星 双手', sub:'', level:2,
+    defaultProf: 0,
+    notation: {
+      right:['1  1  5  5  6  6  5  —','4  4  3  3  2  2  1  —'],
+      left: ['C  —  G  —  C  —  G  —','C  —  G  —  C  —  C  —'],
+    }
+  },
+  {
+    id:'ode2', title:'欢乐颂 双手', sub:'', level:2,
+    defaultProf: 0,
+    notation: {
+      right:['3  3  4  5  5  4  3  2','1  1  2  3  3  2  2  —'],
+      left: ['C  —  G  —  C  —  G  —','C  —  G  —  C  —  C  —'],
+    }
+  },
+  {
+    id:'amazing2', title:'奇异恩典', sub:'Amazing Grace', level:2,
+    defaultProf: 0,
+    notation: {
+      right:['5  1  —  3  1  3  2  —','1  6  5  —  5  1  —  —','3  1  3  5  5  —  —  —'],
+      left: ['C  —  F  —  C  —  G  —','C  —  F  —  C  —  —  —'],
+    }
+  },
+  {
+    id:'canon2', title:'卡农片段', sub:'Pachelbel Canon', level:2,
+    defaultProf: 0,
+    notation: {
+      right:['6  5  4  3  2  1  2  3','4  3  2  1  7  6  7  1','4  5  6  5  4  3  2  1'],
+      left: ['D  A  B  F  G  D  G  A'],
+    }
+  },
+
+  // ── Lv.3 优美 ──
+  {
+    id:'greensleeves', title:'绿袖子', sub:'Greensleeves', level:3,
+    defaultProf: 0,
+    notation: { right:[
+      '6  1  2  —  1  7  5  —',
+      '3  5  4  —  3  2  7  —',
+      '6  1  2  —  1  7  5  —',
+      '3  5  2  —  1  6  —  —',
+    ]}
+  },
+  {
+    id:'gymnopedie', title:'忧愁', sub:'Gymnopedie No.1', level:3,
+    defaultProf: 0,
+    notation: { right:[
+      '5  —  4  —  3  —  2  —',
+      '7  —  1  —  2  —  3  —',
+      '5  —  4  —  3  —  2  —',
+      '1  —  7  —  6  —  —  —',
+    ]}
+  },
+  {
+    id:'scarborough', title:'斯卡布罗集市', sub:'Scarborough Fair', level:3,
+    defaultProf: 0,
+    notation: { right:[
+      '2  —  6  6  3  4  3  —',
+      '2  3  4  5  6  —  5  4',
+      '3  2  1  2  3  —  —  —',
+      '2  —  6  6  5  4  3  —',
+    ]}
+  },
+  {
+    id:'schumann', title:'舒曼小旋律', sub:'Melodie Op.68', level:3,
+    defaultProf: 0,
+    notation: { right:[
+      '1  2  3  —  5  4  3  —',
+      '2  3  4  —  6  5  4  —',
+      '3  4  5  —  1  7  6  —',
+    ]}
+  },
+
+  // ── Lv.4 挑战 ──
+  {
+    id:'minuet', title:'G大调小步舞曲', sub:'Minuet in G · Bach', level:4,
+    defaultProf: 0,
+    notation: { right:[
+      '2  5  6  7  1  2  5  —',
+      '3  1  2  3  4  5  —  —',
+      '1  2  1  7  6  7  1  —',
+    ]}
+  },
+  {
+    id:'canon4', title:'卡农 双手慢速', sub:'Canon in D', level:4,
+    defaultProf: 0,
+    notation: {
+      right:['6  5  4  3  2  1  2  3','4  5  6  5  4  3  2  1'],
+      left: ['D  A  B  F  G  D  G  A','D  A  B  F  G  D  G  A'],
+    }
+  },
+
+  // ── 最终目标 ──
+  {
+    id:'huahai', title:'花海', sub:'周杰伦', level:5,
+    defaultProf: 0,
+    isBoss: true,
+    notation: { right:[] }
+  },
+];
+
+const LEVEL_META = {
+  1: { name:'Lv.1 单手',  cls:'lv1' },
+  2: { name:'Lv.2 双手',  cls:'lv2' },
+  3: { name:'Lv.3 优美',  cls:'lv3' },
+  4: { name:'Lv.4 挑战',  cls:'lv4' },
+  5: { name:'🏆 最终目标', cls:'lv5' },
+};
+
+const WEEK_TASKS = [
+  { day:1, label:'Day 1', sub:'左手单独训练', isRest:false, tasks:[
+    { id:'d1t1', text:'Neothesia 加载小星星双手版，只看左手轨道跟弹5遍' },
+    { id:'d1t2', text:'离开Neothesia，左手单独弹：C — G — C — G —（反复10次）' },
+    { id:'d1t3', text:'右手弹一遍小星星热身，确认还是流畅的' },
+  ]},
+  { day:2, label:'Day 2', sub:'左手熟练，准备合并', isRest:false, tasks:[
+    { id:'d2t1', text:'左手单独：小星星左手轨道正常速度跟完不停顿' },
+    { id:'d2t2', text:'左手单独：欢乐颂左手轨道跟弹3遍' },
+    { id:'d2t3', text:'右手：欢乐颂跑一遍确认流畅' },
+  ]},
+  { day:3, label:'Day 3', sub:'第一次双手合并', isRest:false, tasks:[
+    { id:'d3t1', text:'小星星双手版，速度降至60%，尝试合并' },
+    { id:'d3t2', text:'右手先弹旋律，左手轻轻跟上，允许左手慢半拍' },
+    { id:'d3t3', text:'弹完3遍，不追求完美，感受双手同时动的感觉' },
+  ]},
+  { day:4, label:'Day 4', sub:'休息日', isRest:true, tasks:[
+    { id:'d4t1', text:'完全休息，大脑在后台消化双手协调' },
+  ]},
+  { day:5, label:'Day 5', sub:'巩固合并', isRest:false, tasks:[
+    { id:'d5t1', text:'小星星双手版 · 60%速度 · 3遍' },
+    { id:'d5t2', text:'小星星双手版 · 80%速度 · 3遍' },
+    { id:'d5t3', text:'欢乐颂双手版 · 60%速度 · 尝试合并' },
+  ]},
+  { day:6, label:'Day 6', sub:'提速冲刺', isRest:false, tasks:[
+    { id:'d6t1', text:'小星星双手版正常速度跟完' },
+    { id:'d6t2', text:'欢乐颂双手版 · 80%速度跟完' },
+    { id:'d6t3', text:'奇异恩典双手版 · 60%速度尝试' },
+  ]},
+  { day:7, label:'Day 7', sub:'休息', isRest:true, tasks:[
+    { id:'d7t1', text:'休息，用这周学会的曲子随便弹弹' },
+  ]},
+];
+
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+
+const state = {
+  view: 'songs',      // 'songs' | 'detail' | 'tasks'
+  activeSong: null,
+  proficiency: {},
+  doneTasks: {},
+  openDays: {},
+};
+
+function loadState() {
+  try {
+    const p = JSON.parse(localStorage.getItem('piano_prof') || '{}');
+    const t = JSON.parse(localStorage.getItem('piano_tasks') || '{}');
+    state.proficiency = p;
+    state.doneTasks = t;
+    // seed defaults
+    for (const s of SONGS) {
+      if (state.proficiency[s.id] === undefined) {
+        state.proficiency[s.id] = s.defaultProf ?? 0;
+      }
+    }
+  } catch(e) {
+    for (const s of SONGS) state.proficiency[s.id] = s.defaultProf ?? 0;
+  }
+}
+
+function saveProf() {
+  localStorage.setItem('piano_prof', JSON.stringify(state.proficiency));
+}
+function saveTasks() {
+  localStorage.setItem('piano_tasks', JSON.stringify(state.doneTasks));
+}
+
+// ═══════════════════════════════════════
+//  RENDER HELPERS
+// ═══════════════════════════════════════
+
+function colorNote(row) {
+  return row.split('').map(ch => {
+    if ('1234567'.includes(ch)) return `<span class="n${ch}">${ch}</span>`;
+    if (ch === '—') return `<span class="rest">—</span>`;
+    return ch;
+  }).join('');
+}
+
+function profDot(songId) {
+  const p = state.proficiency[songId] ?? 0;
+  return `<div class="prof-dot ${PROF[p].dot}"></div>`;
+}
+
+// ═══════════════════════════════════════
+//  VIEWS
+// ═══════════════════════════════════════
+
+function renderSongs() {
+  const levels = [1, 2, 3, 4, 5];
+  let html = '';
+  for (const lv of levels) {
+    const group = SONGS.filter(s => s.level === lv);
+    if (!group.length) continue;
+    html += `<div class="section-lbl">${LEVEL_META[lv].name}</div>`;
+    for (const s of group) {
+      const meta = LEVEL_META[s.level];
+      const p = state.proficiency[s.id] ?? 0;
+      html += `
+        <div class="song-card" onclick="openSong('${s.id}')">
+          <div class="song-info">
+            <div class="song-title">${s.title}</div>
+            ${s.sub ? `<div class="song-sub">${s.sub}</div>` : ''}
+          </div>
+          <div class="song-badges">
+            <span class="level-badge ${meta.cls}">${meta.name}</span>
+            ${profDot(s.id)}
+          </div>
+        </div>`;
+    }
+  }
+  return `
+    <div class="finger-guide">
+      <span class="fg fg1">①C</span>
+      <span class="fg fg2">②D</span>
+      <span class="fg fg3">③E</span>
+      <span class="fg fg4">④F</span>
+      <span class="fg fg5">⑤G</span>
+    </div>
+    ${html}`;
+}
+
+
+function renderTasks() {
+  const done = (id) => !!state.doneTasks[id];
+  let html = `<div class="week-header">本周练习计划</div>`;
+  for (const day of WEEK_TASKS) {
+    const total = day.tasks.length;
+    const completed = day.tasks.filter(t => done(t.id)).length;
+    const allDone = completed === total;
+    const isOpen = !!state.openDays[day.day];
+
+    let numCls = day.isRest ? 'rest-day' : (allDone ? 'done-day' : '');
+    html += `
+      <div class="day-card">
+        <div class="day-header" onclick="toggleDay(${day.day})">
+          <div class="day-num ${numCls}">${allDone ? '✓' : day.day}</div>
+          <div class="day-info">
+            <div class="day-title">${day.label} · ${day.sub}</div>
+            <div class="day-sub">${completed}/${total} 完成</div>
+          </div>
+          <div class="day-arrow${isOpen?' open':''}">›</div>
+        </div>
+        <div class="day-tasks${isOpen?' open':''}">
+          ${day.tasks.map(t => `
+            <div class="task-item" onclick="toggleTask('${t.id}')">
+              <div class="task-check${done(t.id)?' checked':''}"></div>
+              <div class="task-text${done(t.id)?' done':''}">${t.text}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+  return html;
+}
+
+// ═══════════════════════════════════════
+//  DETAIL FULLSCREEN
+// ═══════════════════════════════════════
+
+function renderDetailFullscreen(song) {
+  const p = state.proficiency[song.id] ?? 0;
+
+  const profBtns = PROF.map((pf, i) =>
+    `<div class="sf-prof-btn ${pf.cls}${i===p?' sel':''}" onclick="setProf('${song.id}',${i})">${pf.icon} ${pf.label}</div>`
+  ).join('');
+
+  let sheetBody = '';
+  if (song.isBoss) {
+    sheetBody = `<div style="text-align:center;padding:40px 20px">
+      <div style="font-size:60px;margin-bottom:12px">🏆</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:8px">${song.title}</div>
+      <div style="color:var(--muted)">完成 Lv.4 全部曲目后解锁</div>
+    </div>`;
+  } else {
+    const hasLeft = song.notation.left && song.notation.left.length;
+    if (hasLeft) {
+      sheetBody += `<div class="sheet-label">右手</div>`;
+      sheetBody += song.notation.right.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
+      sheetBody += `<div class="sheet-label" style="margin-top:14px">左手</div>`;
+      sheetBody += song.notation.left.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
+    } else {
+      sheetBody += `<div class="sheet-label">右手旋律</div>`;
+      sheetBody += song.notation.right.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
+    }
+    sheetBody += `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted)">实心数字 = 1拍</span>
+      <span style="font-size:11px;color:#ccc">— = 2拍撑住</span>
+    </div>`;
+  }
+
+  const hidden = !!state.controlsHidden;
+  return `<div class="sf-wrap"><div class="sf-inner">
+    ${hidden ? '' : `
+    <div class="sf-hdr">
+      <span class="sf-hdr-back" onclick="goBack()">‹</span>
+      <span class="sf-hdr-title">${song.title}</span>
+      <span class="sf-hdr-hide" onclick="toggleControls()">全屏</span>
+    </div>
+    <div class="sf-prof">${profBtns}</div>`}
+    <div class="sf-body">
+      ${hidden ? `<div class="sf-float" onclick="toggleControls()">‹ 返回</div>` : ''}
+      ${sheetBody}
+    </div>
+  </div></div>`;
+}
+
+// ═══════════════════════════════════════
+//  MAIN RENDER
+// ═══════════════════════════════════════
+
+function render() {
+  const root = document.getElementById('root');
+  const { view, activeSong } = state;
+
+  // 曲目详情：全屏横版
+  if (view === 'detail' && activeSong) {
+    root.innerHTML = renderDetailFullscreen(activeSong);
+    return;
+  }
+
+  let hdrTitle = '🎹 练琴';
+  let body = '';
+
+  if (view === 'songs') {
+    hdrTitle = '🎹 曲目库';
+    body = renderSongs();
+  } else if (view === 'tasks') {
+    hdrTitle = '📋 本周计划';
+    body = renderTasks();
+  }
+
+  root.innerHTML = `
+    <div class="hdr"><div class="hdr-title">${hdrTitle}</div></div>
+    <div class="content">${body}</div>
+    <div class="tab-bar">
+      <div class="tab${view==='songs'?' active':''}" onclick="setView('songs')">
+        <span class="icon">🎵</span>曲目库
+      </div>
+      <div class="tab${view==='tasks'?' active':''}" onclick="setView('tasks')">
+        <span class="icon">📋</span>本周计划
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════
+//  ACTIONS
+// ═══════════════════════════════════════
+
+function setView(v) {
+  state.view = v;
+  state.activeSong = null;
+  render();
+}
+
+function openSong(id) {
+  state.activeSong = SONGS.find(s => s.id === id);
+  state.view = 'detail';
+  render();
+  document.querySelector('.content').scrollTop = 0;
+}
+
+function goBack() {
+  state.view = 'songs';
+  state.activeSong = null;
+  render();
+}
+
+function setProf(id, level) {
+  state.proficiency[id] = level;
+  saveProf();
+  render();
+}
+
+function toggleTask(id) {
+  state.doneTasks[id] = !state.doneTasks[id];
+  saveTasks();
+  render();
+}
+
+function toggleControls() {
+  state.controlsHidden = !state.controlsHidden;
+  render();
+}
+
+function toggleDay(day) {
+  state.openDays[day] = !state.openDays[day];
+  render();
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+loadState();
+render();
+</script>
+</body>
+</html>

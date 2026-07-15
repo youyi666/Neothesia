@@ -13,33 +13,33 @@
 
 ---
 
-## Lv.1 — 新手村（第 1–2 周）
+## Lv.1 — 新手村（第 1–2 周）✅ 已通关
 
 **目标：** 右手能弹完小星星
 
-- [ ] 认识 C D E F G A B 七个白键的位置
-- [ ] 练习 C 大调音阶：右手上下各 5 遍，极慢
-- [ ] 跟弹 `01_single_hand/01_twinkle_twinkle_right_hand_slow.mid`
+- [x] 认识 C D E F G A B 七个白键的位置
+- [x] 练习 C 大调音阶：右手上下各 5 遍，极慢
+- [x] 跟弹 `01_single_hand/01_twinkle_twinkle_right_hand_slow.mid`
 
 **过关条件：** 右手不停顿地跟完小星星 ✓
 
 ---
 
-## Lv.2 — 初入江湖（第 3–4 周）
+## Lv.2 — 初入江湖（第 3–4 周）✅ 已通关
 
 **目标：** 右手流畅，认识更多曲子
 
-- [ ] `01_single_hand/02_ode_to_joy_right_hand_slow.mid`（欢乐颂）
-- [ ] `01_single_hand/03_mary_had_a_little_lamb_right_hand_slow.mid`
-- [ ] `01_single_hand/04_frere_jacques_right_hand_slow.mid`
-- [ ] `01_single_hand/05_au_clair_de_la_lune_right_hand_slow.mid`
-- [ ] 左手单独练 C 大调音阶
+- [x] `01_single_hand/02_ode_to_joy_right_hand_slow.mid`（欢乐颂）
+- [x] `01_single_hand/03_mary_had_a_little_lamb_right_hand_slow.mid`
+- [x] `01_single_hand/04_frere_jacques_right_hand_slow.mid`
+- [x] `01_single_hand/05_au_clair_de_la_lune_right_hand_slow.mid`
+- [x] 左手单独练 C 大调音阶
 
 **过关条件：** 5 首单手曲全部跟完，中间不暂停 ✓
 
 ---
 
-## 🏆 Boss 1：单手之王
+## 🏆 Boss 1：单手之王 ✅ 已击败
 
 > 右手已经听话了。接下来训练左手，然后让两只手认识彼此。
 
