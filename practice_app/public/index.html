@@ -2,8 +2,9 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#6c3fc5">
 <title>🎹 练琴</title>
 <style>
@@ -55,63 +56,100 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 
 /* ── Fullscreen sheet view ── */
 .sf-wrap {
-  position:fixed; top:0; left:0; width:100vw; height:100vh;
-  background:#fff; z-index:200; overflow:hidden;
-}
-.sf-inner {
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background:#fafafa; z-index:200;
   display:flex; flex-direction:column;
-  width:100%; height:100%; overflow:hidden;
-}
-/* 竖屏时旋转90度 → 模拟横屏 */
-@media (orientation:portrait) {
-  .sf-inner {
-    width:100vh; height:100vw;
-    position:absolute;
-    top:calc(50vh - 50vw);
-    left:calc(50vw - 50vh);
-    transform:rotate(90deg);
-    transform-origin:center center;
-    overflow:hidden;
-  }
 }
 .sf-hdr {
-  height:40px; background:var(--primary); color:#fff;
-  display:flex; align-items:center; padding:0 10px;
-  flex-shrink:0; gap:8px;
+  height:52px; background:var(--primary); color:#fff;
+  display:flex; align-items:center; padding:0 16px;
+  flex-shrink:0; gap:12px;
+  box-shadow:0 2px 8px rgba(108,63,197,.25);
 }
-.sf-hdr-back { font-size:22px; cursor:pointer; flex-shrink:0; }
-.sf-hdr-title { flex:1; font-size:14px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sf-hdr-hide { font-size:12px; background:rgba(255,255,255,.2); border-radius:12px; padding:3px 10px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+.sf-hdr-back {
+  font-size:28px; cursor:pointer; flex-shrink:0;
+  opacity:.9; line-height:1; padding-right:4px;
+}
+.sf-hdr-title { flex:1; font-size:16px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sf-hdr-sub { font-size:11px; opacity:.7; flex-shrink:0; white-space:nowrap; }
 .sf-prof {
-  display:flex; gap:4px; padding:5px 8px;
-  background:var(--primary-light); flex-shrink:0;
+  display:flex; gap:6px; padding:8px 12px;
+  background:#fff; flex-shrink:0;
+  border-bottom:1px solid var(--border);
 }
 .sf-prof-btn {
-  flex:1; text-align:center; padding:4px 2px;
-  border-radius:6px; font-size:10px; cursor:pointer;
+  flex:1; text-align:center; padding:5px 3px;
+  border-radius:8px; cursor:pointer;
   border:2px solid transparent; transition:all .15s;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  display:flex; flex-direction:column; align-items:center; gap:1px;
 }
 .sf-prof-btn.sel { border-color:var(--primary); font-weight:700; }
+.pf-icon { font-size:14px; line-height:1.2; }
+.pf-label { font-size:10px; line-height:1.2; white-space:nowrap; }
 .pb0{background:#f5f5f5;color:#888}
 .pb1{background:#fef5e4;color:#a06800}
 .pb2{background:#eaf4fd;color:#1a5a8a}
 .pb3{background:#eafaf1;color:#1a6b3a}
-/* 隐藏控件时的浮动返回按钮 */
-.sf-float {
-  position:absolute; top:8px; left:8px; z-index:10;
-  background:rgba(108,63,197,.85); color:#fff;
-  border-radius:20px; padding:5px 12px; font-size:12px;
-  cursor:pointer; backdrop-filter:blur(4px);
+.sf-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+.sheet-section { margin-bottom:20px; }
+.sheet-label {
+  font-size:11px; font-weight:700; color:var(--primary);
+  letter-spacing:1.5px; text-transform:uppercase;
+  margin-bottom:8px; padding-bottom:4px;
+  border-bottom:2px solid var(--primary-light);
 }
-.sf-body { flex:1; overflow:auto; padding:10px 14px; -webkit-overflow-scrolling:touch; position:relative; }
-.sheet-label { font-size:10px; font-weight:700; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
 .sheet-row {
   font-family:"Courier New",Courier,monospace;
-  font-size:20px; line-height:1.9; letter-spacing:4px;
+  font-size:22px; line-height:2; letter-spacing:5px;
   white-space:nowrap; overflow-x:auto; display:block;
-  -webkit-overflow-scrolling:touch;
+  -webkit-overflow-scrolling:touch; padding-bottom:2px;
 }
+/* ── 双手对齐谱（grid 按节拍列对齐） ── */
+.duo-block { margin-bottom:22px; }
+.duo-scroller { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.duo-grid {
+  display:grid;
+  grid-template-columns:20px repeat(var(--cols),1fr);
+  width:100%;
+}
+.duo-grid-lbl {
+  display:flex; align-items:center;
+  font-size:10px; font-weight:700; font-family:sans-serif; letter-spacing:0;
+}
+.duo-grid-lbl.r { color:var(--primary); }
+.duo-grid-lbl.l { color:var(--muted); }
+.duo-cell-r {
+  font-family:"Courier New",Courier,monospace;
+  font-size:20px; text-align:center; line-height:2.2;
+}
+.duo-cell-r span { display:inline-block; position:relative; }
+.duo-cell-r span.n1{color:#e74c3c}
+.duo-cell-r span.n2{color:#e07b39}
+.duo-cell-r span.n3{color:#27ae60}
+.duo-cell-r span.n4{color:#2475a8}
+.duo-cell-r span.n5{color:#7c5cbf}
+.duo-cell-r span.n6{color:#16a085}
+.duo-cell-r span.n7{color:#555}
+.duo-cell-r span.rest{color:#ccc;font-size:.8em}
+.duo-cell-l {
+  font-family:"Courier New",Courier,monospace;
+  font-size:11px; color:var(--muted); text-align:center;
+  border-top:1px dashed var(--border);
+  line-height:2; padding:1px 0 3px;
+}
+.duo-cell-l.ld { color:#ddd; }
+/* ── 横屏：头部 + 熟练度栏压缩成一行 ── */
+@media (orientation:landscape) {
+  .sf-hdr { height:38px; }
+  .sf-prof { padding:3px 10px; gap:8px; }
+  .sf-prof-btn { flex-direction:row; gap:5px; padding:3px 10px; flex:none; }
+  .pf-icon { font-size:13px; }
+  .pf-label { font-size:11px; }
+  .sheet-row { font-size:26px; letter-spacing:6px; }
+  .duo-cell-r { font-size:24px; }
+  .duo-cell-l { font-size:13px; }
+}
+.sheet-row span { display:inline-block; position:relative; }
 .sheet-row span.n1{color:#e74c3c}
 .sheet-row span.n2{color:#e07b39}
 .sheet-row span.n3{color:#27ae60}
@@ -120,6 +158,56 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .sheet-row span.n6{color:#16a085}
 .sheet-row span.n7{color:#555}
 .sheet-row span.rest{color:#ccc;font-size:.8em}
+/* 八度点：^ = 上方高八度，_ = 下方低八度 */
+.oct-hi::after { content:'·'; position:absolute; top:-0.5em; left:50%; transform:translateX(-50%); font-size:.7em; font-weight:900; line-height:1; }
+.oct-lo::after { content:'·'; position:absolute; bottom:-0.4em; left:50%; transform:translateX(-50%); font-size:.7em; font-weight:900; line-height:1; }
+
+/* ── MIDI 五线谱 ── */
+.score-guide {
+  display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px;
+}
+.score-key {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 9px; border-radius:999px; background:#fff;
+  border:1px solid var(--border); color:#555; font-size:11px;
+}
+.score-key strong { color:var(--text); }
+.score-key .clef-mini {
+  font-family:"Segoe UI Symbol","Noto Music",serif;
+  color:var(--primary); font-size:20px; line-height:12px;
+}
+.score-card {
+  background:#fff; border:1px solid var(--border); border-radius:14px;
+  overflow:hidden; box-shadow:0 2px 10px rgba(42,24,80,.06);
+}
+.score-toolbar {
+  min-height:42px; padding:7px 10px 7px 12px;
+  display:flex; align-items:center; gap:10px;
+  background:#f7f4fc; border-bottom:1px solid var(--border);
+}
+.score-facts { flex:1; min-width:0; font-size:11px; color:#655d73; line-height:1.4; }
+.note-toggle {
+  flex-shrink:0; border:1px solid #cfc5e5; background:#fff; color:var(--primary);
+  border-radius:9px; padding:6px 9px; font-size:11px; font-weight:600; cursor:pointer;
+}
+.score-paper { padding:8px; background:#fff; }
+.score-mount { width:100%; min-height:160px; }
+.score-mount svg { display:block; width:100%; height:auto; }
+.score-status {
+  min-height:150px; display:flex; align-items:center; justify-content:center;
+  text-align:center; padding:24px; color:var(--muted); font-size:13px; line-height:1.7;
+}
+.score-foot {
+  display:flex; flex-wrap:wrap; gap:10px 16px; padding:9px 12px;
+  background:#fcfbfe; border-top:1px solid var(--border);
+  color:#777; font-size:10px; line-height:1.5;
+}
+.midi-source {
+  margin-top:10px; padding:9px 12px; border-radius:10px;
+  background:var(--primary-light); color:#5e5270; font-size:10px; line-height:1.5;
+  word-break:break-all;
+}
+.midi-source strong { color:var(--primary); margin-right:5px; }
 
 .finger-guide { display:flex; gap:6px; flex-wrap:wrap; padding:10px 14px; background:var(--primary-light); border-radius:10px; margin-bottom:12px; }
 .fg { font-size:11px; padding:3px 8px; border-radius:14px; color:#fff; font-weight:600; }
@@ -152,20 +240,185 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .task-text { font-size:14px; line-height:1.5; }
 .task-text.done { color:var(--muted); text-decoration:line-through; }
 
-/* ── Landscape fullscreen ── */
-@media (orientation:landscape) {
+/* ── Landscape (手机/平板横屏，不是桌面浏览器宽窗口) ── */
+@media (orientation:landscape) and (max-height:700px) {
   .tab-bar { display:none; }
-  .hdr { height:42px; }
-  .sheet-row { font-size:32px; letter-spacing:8px; }
+  .hdr { height:44px; }
   .content { padding:8px 10px; }
+  .sf-body { padding:8px 12px 12px; }
+  .score-guide { margin-bottom:6px; }
+  .score-key { padding:3px 8px; }
+  .score-toolbar { min-height:36px; padding-top:4px; padding-bottom:4px; }
+  .score-paper { padding:4px 8px; }
+}
+
+/* 手机/平板横屏：自动进入沉浸看谱，尽量把高度还给乐谱 */
+@media (orientation:landscape) and (max-height:600px) {
+  .sf-hdr {
+    height:32px; padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));
+    gap:7px; box-shadow:none;
+  }
+  .sf-hdr-back { font-size:23px; padding-right:2px; }
+  .sf-hdr-title { font-size:14px; }
+  .sf-hdr-sub {
+    font-size:9px; opacity:.85; cursor:pointer;
+    padding:4px 7px; border:1px solid rgba(255,255,255,.3); border-radius:12px;
+  }
+  .sf-prof { display:none; }
+  .sf-prof.landscape-open {
+    display:flex; position:absolute; z-index:20; top:34px; right:8px;
+    width:min(430px,calc(100% - 16px)); padding:5px; gap:5px;
+    border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 5px 20px rgba(30,15,60,.22);
+  }
+  .sf-prof.landscape-open .sf-prof-btn {
+    display:flex; flex:1; justify-content:center; padding:4px 5px;
+  }
+  .sf-body { padding:3px 8px max(6px,env(safe-area-inset-bottom)); }
+  .score-guide { display:none; }
+  .score-card { border-radius:7px; box-shadow:none; }
+  .score-toolbar { min-height:29px; padding:2px 6px 2px 9px; }
+  .score-facts { font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .note-toggle { padding:4px 7px; border-radius:7px; font-size:9px; }
+  .score-paper { padding:0 3px 3px; }
+  .score-foot, .midi-source { display:none; }
 }
 
 /* ── Section label ── */
 .section-lbl { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin:16px 0 8px; }
+
+/* ── Courses ── */
+.course-card { background:var(--card); border-radius:12px; padding:14px 16px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer; }
+.course-card-title { font-size:16px; font-weight:600; margin-bottom:6px; }
+.course-card-sub { font-size:12px; color:var(--muted); margin-bottom:8px; }
+.course-progress-track { height:6px; border-radius:4px; background:var(--primary-light); overflow:hidden; }
+.course-progress-fill { height:100%; background:var(--primary); border-radius:4px; transition:width .2s; }
+.add-course-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:14px; border-radius:12px; border:2px dashed var(--border); color:var(--primary); font-weight:600; cursor:pointer; margin-bottom:10px; }
+.course-resume { background:#fff; border:2px solid var(--primary); border-radius:12px; padding:16px; margin-bottom:18px; box-shadow:0 2px 8px rgba(42,24,80,.08); }
+.course-resume-kicker { color:var(--primary); font-size:11px; font-weight:700; letter-spacing:1px; margin-bottom:5px; }
+.course-resume-title { font-size:18px; font-weight:700; line-height:1.35; }
+.course-resume-meta { color:var(--muted); font-size:12px; line-height:1.5; margin:5px 0 13px; }
+.course-resume-actions { display:flex; gap:8px; }
+.course-resume-actions .btn { flex:1; }
+.course-list-heading { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:1px; margin:4px 0 9px; }
+
+.field { margin-bottom:14px; }
+.field-label { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px; display:block; }
+.field select, .field input[type=text], .field input[type=number] {
+  width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border);
+  font-size:14px; background:#fff; color:var(--text);
+}
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:10px 16px; border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; border:none; }
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:disabled { opacity:.45; cursor:default; }
+.btn-secondary { background:var(--primary-light); color:var(--primary); }
+.btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.upload-drop { border:2px dashed var(--border); border-radius:12px; padding:18px; text-align:center; color:var(--muted); font-size:13px; margin-bottom:14px; }
+
+.track-table { width:100%; border-collapse:collapse; margin-bottom:14px; font-size:13px; }
+.track-table th, .track-table td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+.track-table th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; }
+
+.stage-header { font-size:12px; font-weight:700; color:var(--primary); letter-spacing:1px; text-transform:uppercase; margin:18px 0 8px; padding-bottom:4px; border-bottom:2px solid var(--primary-light); }
+.lesson-row { background:var(--card); border-radius:10px; padding:12px 14px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.lesson-row.locked { opacity:.5; }
+.lesson-row-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.lesson-title { font-size:14px; font-weight:600; }
+.lesson-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+.lesson-badges { display:flex; gap:5px; flex-shrink:0; }
+.lesson-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; white-space:nowrap; }
+.badge-hand-right { background:#ddeeff; color:#1a6fa8; }
+.badge-hand-left { background:#fde8cc; color:#a05a00; }
+.badge-hand-both { background:#d5f5e3; color:#1a7a43; }
+.badge-done { background:#eafaf1; color:#1a6b3a; }
+.lesson-actions { display:flex; gap:8px; margin-top:10px; }
+.lesson-actions .btn { padding:7px 12px; font-size:12px; }
+
+.toast { position:fixed; left:50%; bottom:calc(var(--tab-h) + 16px); transform:translateX(-50%); background:rgba(20,15,35,.9); color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; z-index:500; max-width:88%; text-align:center; }
+.error-text { color:#c0392b; font-size:12px; margin-top:6px; }
+.empty-hint { color:var(--muted); font-size:13px; text-align:center; padding:24px 0; }
+
+/* ── Practice session (Web MIDI 实时评分) ── */
+.practice-wrap { display:flex; flex-direction:column; align-items:center; width:100%; padding:10px 0 30px; }
+.practice-progress { font-size:12px; color:var(--muted); margin-bottom:18px; }
+.practice-stage { display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap; justify-content:center; }
+.practice-dot { width:9px; height:9px; border-radius:50%; background:var(--border); }
+.practice-dot.done-clean { background:#2ecc71; }
+.practice-dot.done-mess { background:#f39c12; }
+.practice-dot.current { background:var(--primary); box-shadow:0 0 0 3px var(--primary-light); }
+.practice-target { background:var(--card); border-radius:16px; padding:28px 24px; min-width:220px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,.08); margin-bottom:18px; }
+.practice-target-notes { font-size:34px; font-weight:700; letter-spacing:2px; margin-bottom:6px; }
+.practice-target-hand { font-size:12px; }
+.practice-run-progress { color:var(--muted); font-size:12px; margin:-10px 0 14px; }
+.practice-run-progress strong { color:var(--primary); }
+.practice-lesson-meta { width:min(100%,900px); display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; }
+.practice-lesson-meta .practice-progress { margin:0; font-weight:700; color:var(--text); }
+.practice-lesson-meta .practice-run-progress { margin:0; text-align:right; }
+.practice-lesson-meta .practice-stage { margin:0; flex:0 0 auto; }
+.practice-now-summary { width:min(100%,900px); display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:0 0 10px; padding:10px 12px; border:1px solid #ddd2f3; border-left:4px solid #6c3fc5; border-radius:8px; background:#faf8ff; }
+.practice-now-label { color:#6c3fc5; font-size:11px; font-weight:800; }
+.practice-now-summary strong { color:var(--text); font-size:18px; letter-spacing:0; }
+.practice-now-summary .lesson-badge { margin-left:auto; }
+.practice-finger-guide { width:min(100%,900px); margin:0 0 16px; }
+.practice-finger-title { color:var(--muted); font-size:11px; font-weight:700; margin:0 0 7px 2px; }
+.practice-finger-list { display:grid; grid-template-columns:repeat(auto-fit, minmax(126px, 1fr)); gap:8px; }
+.practice-finger-card { border:1px solid var(--border); border-left:4px solid #4c8bc7; border-radius:8px; background:var(--card); padding:9px 10px; min-width:0; }
+.practice-finger-card.left { border-left-color:#d88732; }
+.practice-finger-top { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+.practice-finger-hand { color:var(--muted); font-size:10px; font-weight:700; }
+.practice-finger-note { color:var(--text); font-size:18px; font-weight:800; }
+.practice-finger-detail { color:var(--text); font-size:12px; font-weight:700; margin-top:4px; }
+.practice-finger-key { color:var(--muted); font-size:10px; margin-top:3px; }
+.practice-finger-key kbd { background:#f1eff8; border:1px solid #d8d3e5; border-radius:4px; color:var(--text); font-family:inherit; font-weight:700; padding:1px 4px; }
+.practice-sheet { width:min(100%,900px); margin:4px 0 16px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#fff; }
+.practice-sheet-head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; padding:10px 12px; border-bottom:1px solid var(--border); background:#fcfbfe; }
+.practice-sheet-head strong { font-size:13px; }
+.practice-sheet-head span { color:var(--muted); font-size:10px; text-align:right; }
+.practice-sheet.lesson-score .score-paper { background:#fffefd; }
+.practice-score-legend .pointer { background:#6c3fc5; clip-path:polygon(50% 100%, 0 0, 100% 0); border-radius:0; }
+.practice-score-legend { display:flex; flex-wrap:wrap; gap:8px 12px; padding:7px 12px; border-top:1px solid var(--border); background:#fcfbfe; color:var(--muted); font-size:10px; }
+.practice-score-legend i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; background:#d4cfd6; }
+.practice-score-legend .target { background:#4c8bc7; }
+.practice-score-legend .current { background:#6c3fc5; }
+.practice-score-legend .done { background:#1a9b6d; }
+.practice-stats { display:flex; gap:18px; margin-bottom:20px; flex-wrap:wrap; justify-content:center; }
+.practice-stat { text-align:center; }
+.practice-stat-val { font-size:20px; font-weight:700; }
+.practice-stat-lbl { font-size:11px; color:var(--muted); }
+.midi-status-card { background:var(--card); border-radius:12px; padding:18px; text-align:center; max-width:320px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.midi-status-icon { font-size:32px; margin-bottom:8px; }
+.practice-input-note { font-size:12px; color:var(--muted); margin:-8px 0 14px; text-align:center; }
+.practice-input-note strong { color:var(--text); }
+.pc-keyboard { width:min(100%,360px); margin:0 0 20px; }
+.pc-keyboard-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:8px; font-size:12px; font-weight:700; }
+.pc-keyboard-head span { color:var(--muted); font-weight:400; }
+.pc-key-grid { display:grid; grid-template-columns:repeat(9, minmax(0, 1fr)); gap:4px; }
+.pc-key { min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; border:1px solid var(--border); border-radius:5px; background:#fff; color:var(--text); }
+.pc-key.sharp { background:#4b465a; border-color:#4b465a; color:#fff; }
+.pc-key.target { border:2px solid var(--primary); background:var(--primary-light); color:var(--primary); font-weight:700; }
+.pc-key.sharp.target { background:var(--primary); border-color:var(--primary); color:#fff; }
+.pc-key-code { font-size:13px; line-height:1; }
+.pc-key-note { font-size:9px; line-height:1; opacity:.72; }
+.pc-keyboard-controls { display:flex; justify-content:center; gap:8px; margin-top:10px; }
+.pc-keyboard-controls button { min-width:84px; }
+.pc-keyboard-warning { color:#a05a00; font-size:11px; line-height:1.45; margin-top:8px; text-align:center; }
+.result-card { background:var(--card); border-radius:16px; padding:24px; text-align:center; box-shadow:0 2px 12px rgba(0,0,0,.1); max-width:320px; width:100%; }
+.result-score { font-size:42px; font-weight:800; color:var(--primary); }
+.result-stars { color:#d99800; font-size:27px; letter-spacing:3px; line-height:1.25; margin-top:4px; }
+.result-star-label { color:var(--muted); font-size:11px; margin:1px 0 7px; }
+.result-best { color:#5f5670; font-size:11px; margin:-10px 0 15px; }
+.result-pass { font-size:14px; font-weight:700; margin:6px 0 16px; }
+.result-pass.pass { color:#1a7a43; }
+.result-pass.fail { color:#a05a00; }
+.result-next { color:var(--muted); font-size:12px; margin:-10px 0 15px; }
+.result-countdown { color:var(--primary); font-size:13px; font-weight:700; margin:-6px 0 15px; }
+.result-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px; text-align:left; margin-bottom:16px; }
+.result-grid div span { display:block; color:var(--muted); font-size:10px; }
 </style>
 </head>
 <body>
 <div id="root"></div>
+<script src="/lib/scoring.js"></script>
 <script>
 // ═══════════════════════════════════════
 //  DATA
@@ -183,6 +436,7 @@ const SONGS = [
   {
     id:'twinkle', title:'小星星', sub:'Twinkle Twinkle', level:1,
     defaultProf: 3,
+    midi:'01_single_hand/01_twinkle_twinkle_right_hand_slow.mid',
     notation: { right:[
       '1  1  5  5  6  6  5  —',
       '4  4  3  3  2  2  1  —',
@@ -195,6 +449,7 @@ const SONGS = [
   {
     id:'ode', title:'欢乐颂', sub:'Ode to Joy', level:1,
     defaultProf: 2,
+    midi:'01_single_hand/02_ode_to_joy_right_hand_slow.mid',
     notation: { right:[
       '3  3  4  5  5  4  3  2',
       '1  1  2  3  3  2  2  —',
@@ -205,6 +460,7 @@ const SONGS = [
   {
     id:'mary', title:'玛丽有只小羊羔', sub:'Mary Had a Little Lamb', level:1,
     defaultProf: 2,
+    midi:'01_single_hand/03_mary_had_a_little_lamb_right_hand_slow.mid',
     notation: { right:[
       '3  2  1  2  3  3  3  —',
       '2  2  2  —  3  5  5  —',
@@ -215,17 +471,19 @@ const SONGS = [
   {
     id:'frere', title:'雅克兄弟', sub:'两只老虎', level:1,
     defaultProf: 1,
+    midi:'01_single_hand/04_frere_jacques_right_hand_slow.mid',
     notation: { right:[
       '1  2  3  1     1  2  3  1',
       '3  4  5  —     3  4  5  —',
       '5  6  5  4  3  1',
       '5  6  5  4  3  1',
-      '1  5  1  —     1  5  1  —',
+      '1  5_  1  —     1  5_  1  —',
     ]}
   },
   {
     id:'auclair', title:'Au Clair de la Lune', sub:'月光下', level:1,
     defaultProf: 1,
+    midi:'01_single_hand/05_au_clair_de_la_lune_right_hand_slow.mid',
     notation: { right:[
       '1  1  1  2  3  —  2  —',
       '1  3  2  2  1  —  —  —',
@@ -238,33 +496,37 @@ const SONGS = [
   {
     id:'twinkle2', title:'小星星 双手', sub:'', level:2,
     defaultProf: 0,
+    midi:'02_two_hands_easy/01_twinkle_twinkle_two_hands_easy.mid',
     notation: {
       right:['1  1  5  5  6  6  5  —','4  4  3  3  2  2  1  —'],
-      left: ['C  —  G  —  C  —  G  —','C  —  G  —  C  —  C  —'],
+      left: ['C3  —  G2  —  C3  —  G2  —','C3  —  G2  —  C3  —  G2  —'],
     }
   },
   {
     id:'ode2', title:'欢乐颂 双手', sub:'', level:2,
     defaultProf: 0,
+    midi:'02_two_hands_easy/02_ode_to_joy_two_hands_easy.mid',
     notation: {
       right:['3  3  4  5  5  4  3  2','1  1  2  3  3  2  2  —'],
-      left: ['C  —  G  —  C  —  G  —','C  —  G  —  C  —  C  —'],
+      left: ['C3  —  G2  —  C3  —  G2  —','C3  —  G2  —  C3  —  G2  —'],
     }
   },
   {
     id:'amazing2', title:'奇异恩典', sub:'Amazing Grace', level:2,
     defaultProf: 0,
+    midi:'02_two_hands_easy/03_amazing_grace_two_hands_easy.mid',
     notation: {
-      right:['5  1  —  3  1  3  2  —','1  6  5  —  5  1  —  —','3  1  3  5  5  —  —  —'],
-      left: ['C  —  F  —  C  —  G  —','C  —  F  —  C  —  —  —'],
+      right:['5_  1  —  3  1  3  —  2','1  —  6_  5_  —  5_  1  —','3  1  3  —  2  3  —  5  1  —'],
+      left: ['C3  —  F2  —  C3  —  G2  —','C3  —  F2  —  C3  —  G2  —'],
     }
   },
   {
     id:'canon2', title:'卡农片段', sub:'Pachelbel Canon', level:2,
     defaultProf: 0,
+    midi:'02_two_hands_easy/04_pachelbel_canon_easy_loop.mid',
     notation: {
-      right:['6  5  4  3  2  1  2  3','4  3  2  1  7  6  7  1','4  5  6  5  4  3  2  1'],
-      left: ['D  A  B  F  G  D  G  A'],
+      right:['3  2  1  7_  6_  5_  6_  7_','1  7_  6_  5_  4_  3_  4_  5_','1  2  3  5  6  —  5  —'],
+      left: ['D3  A2  B2  F#2  G2  D2  G2  A2','D3  A2  B2  F#2  G2  D2  G2  A2','D3  A2  B2  F#2  G2  D2  G2  A2'],
     }
   },
 
@@ -272,6 +534,7 @@ const SONGS = [
   {
     id:'greensleeves', title:'绿袖子', sub:'Greensleeves', level:3,
     defaultProf: 0,
+    midi:'03_beautiful_slow/01_greensleeves_melody_slow.mid',
     notation: { right:[
       '6  1  2  —  1  7  5  —',
       '3  5  4  —  3  2  7  —',
@@ -282,6 +545,7 @@ const SONGS = [
   {
     id:'gymnopedie', title:'忧愁', sub:'Gymnopedie No.1', level:3,
     defaultProf: 0,
+    midi:'03_beautiful_slow/02_satie_gymnopedie_theme_easy.mid',
     notation: { right:[
       '5  —  4  —  3  —  2  —',
       '7  —  1  —  2  —  3  —',
@@ -292,6 +556,7 @@ const SONGS = [
   {
     id:'scarborough', title:'斯卡布罗集市', sub:'Scarborough Fair', level:3,
     defaultProf: 0,
+    midi:'03_beautiful_slow/03_scarborough_fair_melody_slow.mid',
     notation: { right:[
       '2  —  6  6  3  4  3  —',
       '2  3  4  5  6  —  5  4',
@@ -302,6 +567,7 @@ const SONGS = [
   {
     id:'schumann', title:'舒曼小旋律', sub:'Melodie Op.68', level:3,
     defaultProf: 0,
+    midi:'03_beautiful_slow/04_schumann_melodie_theme_easy.mid',
     notation: { right:[
       '1  2  3  —  5  4  3  —',
       '2  3  4  —  6  5  4  —',
@@ -313,6 +579,7 @@ const SONGS = [
   {
     id:'minuet', title:'G大调小步舞曲', sub:'Minuet in G · Bach', level:4,
     defaultProf: 0,
+    midi:'04_challenge/01_bach_minuet_g_opening_easy.mid',
     notation: { right:[
       '2  5  6  7  1  2  5  —',
       '3  1  2  3  4  5  —  —',
@@ -322,9 +589,10 @@ const SONGS = [
   {
     id:'canon4', title:'卡农 双手慢速', sub:'Canon in D', level:4,
     defaultProf: 0,
+    midi:'04_challenge/02_canon_in_d_slow_two_hands.mid',
     notation: {
       right:['6  5  4  3  2  1  2  3','4  5  6  5  4  3  2  1'],
-      left: ['D  A  B  F  G  D  G  A','D  A  B  F  G  D  G  A'],
+      left: ['D3  A2  B2  F#2  G2  D2  G2  A2','D3  A2  B2  F#2  G2  D2  G2  A2'],
     }
   },
 
@@ -384,12 +652,31 @@ const WEEK_TASKS = [
 // ═══════════════════════════════════════
 
 const state = {
-  view: 'songs',      // 'songs' | 'detail' | 'tasks'
+  view: 'courses',    // 'songs' | 'detail' | 'tasks' | 'courses' | 'import' | 'course-detail'
   activeSong: null,
   proficiency: {},
   doneTasks: {},
   openDays: {},
+  showNoteNames: true,
+
+  courses: [],
+  coursesLoaded: false,
+  drillFingering: {}, // 专项特训指法表：courseId -> {right:[...]}，来自 /api/drills
+  settings: {},
+  activeCourseId: null,
+  activeCourse: null,
+  import: null, // wizard state, see startImport()
+  practice: null, // real-time scoring session state, see openPracticeSession()
+  toast: '',
 };
+
+const scoreState = {
+  library: {},
+  status: 'loading',
+  error: '',
+};
+
+let scoreResizeTimer = null;
 
 function loadState() {
   try {
@@ -397,6 +684,7 @@ function loadState() {
     const t = JSON.parse(localStorage.getItem('piano_tasks') || '{}');
     state.proficiency = p;
     state.doneTasks = t;
+    state.showNoteNames = localStorage.getItem('piano_note_names') !== '0';
     // seed defaults
     for (const s of SONGS) {
       if (state.proficiency[s.id] === undefined) {
@@ -416,15 +704,566 @@ function saveTasks() {
 }
 
 // ═══════════════════════════════════════
+//  FINGERING DATA  (手动核对，黑键不用1/5指)
+// ═══════════════════════════════════════
+
+const FINGERING = {
+  // 卡农片段（简易循环）右手 22音
+  // F#4(3) E4(2) D4(1) | C#4(3) B3(2) A3(1) B3(2) C#4(3)
+  // D4(4) C#4(3) B3(2) A3(1) | G3(3) F#3(2) G3(3) A3(4)
+  // D4(1) E4(2) F#4(3) A4(4) B4(5) A4(4)
+  '02_two_hands_easy/04_pachelbel_canon_easy_loop.mid': {
+    right: [3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4],
+  },
+
+  // 卡农双手慢速：右手同上弹两遍(44音)，左手16音
+  // 左手：D3(1) A2(5) B2(4) F#2(3) G2(2) D2(5) G2(2) A2(1) × 2
+  // 黑键 F#2 用 3(中指)，D2 白键用 5(小指)，无拇指/小指按黑键
+  '04_challenge/02_canon_in_d_slow_two_hands.mid': {
+    right: [3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4,
+            3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4],
+    left:  [1,5,4,3,2,5,2,1, 1,5,4,3,2,5,2,1],
+  },
+
+  // 奇异恩典双手简易：右手18音，左手8音（全白键，C大调）
+  // 右手两个把位：把位A G3-D4(G3=5,A3=4,C4=2,D4=1)，把位B C4-G4(C4=1,D4=2,E4=3,G4=5)
+  // 第1段：G3(5)[A] C4(2)[A] | 换→E4(3)[B] C4(1)[B] E4(3)[B] | 换→D4(1)[A] C4(2)[A] A3(4)[A] G3(5)[A]
+  // 第2段：G3(5)[A] C4(2)[A] | 换→E4(3)[B] C4(1)[B] E4(3)[B] | 换→D4(1)[A] E4(3)[B] G4(5)[B] C4(1)[B]
+  // 下行须整体保持把位A：D4(1)→C4(2)→A3(4)→G3(5) 全在A位，不得混用B位（否则C4(1)下接A3(4)物理不可达）
+  // 左手：C3(1) F2(5) C3(1) G2(5) × 2
+  '02_two_hands_easy/03_amazing_grace_two_hands_easy.mid': {
+    right: [5,2,3,1,3,1,2,4,5, 5,2,3,1,3,1,3,5,1],
+    left:  [1,5,1,5, 1,5,1,5],
+  },
+};
+
+// DB courseId → FINGERING 别名映射（DB id 与 midi 文件名不同时用此表）
+const FINGERING_BY_COURSE = {
+  'canon_easy':    FINGERING['02_two_hands_easy/04_pachelbel_canon_easy_loop.mid'],
+  'canon_slow':    FINGERING['04_challenge/02_canon_in_d_slow_two_hands.mid'],
+  'amazing_grace': FINGERING['02_two_hands_easy/03_amazing_grace_two_hands_easy.mid'],
+};
+
+// ═══════════════════════════════════════
 //  RENDER HELPERS
 // ═══════════════════════════════════════
 
-function colorNote(row) {
-  return row.split('').map(ch => {
-    if ('1234567'.includes(ch)) return `<span class="n${ch}">${ch}</span>`;
-    if (ch === '—') return `<span class="rest">—</span>`;
-    return ch;
-  }).join('');
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const PITCH_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const DIATONIC_CLASS = [0,0,1,1,2,3,3,4,4,5,5,6];
+
+function svgEl(tag, attrs = {}, text = '') {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value !== undefined && value !== null) node.setAttribute(key, value);
+  }
+  if (text) node.textContent = text;
+  return node;
+}
+
+function midiName(midi) {
+  const octave = Math.floor(midi / 12) - 1;
+  return `${PITCH_NAMES[midi % 12]}${octave}`;
+}
+
+function staffPosition(midi, clef) {
+  const octave = Math.floor(midi / 12) - 1;
+  const absoluteStep = octave * 7 + DIATONIC_CLASS[midi % 12];
+  const bottomLineStep = clef === 'bass' ? 18 : 30; // bass G2 / treble E4
+  return absoluteStep - bottomLineStep;
+}
+
+function noteY(midi, clef, staffTop) {
+  return staffTop + 40 - staffPosition(midi, clef) * 5;
+}
+
+function drawLedgerLines(svg, x, position, staffTop, ink = '#25222a') {
+  if (position < 0) {
+    for (let p = -2; p >= position; p -= 2) {
+      const y = staffTop + 40 - p * 5;
+      svg.appendChild(svgEl('line', { x1:x-10, x2:x+10, y1:y, y2:y, stroke:ink, 'stroke-width':1.2 }));
+    }
+  } else if (position > 8) {
+    for (let p = 10; p <= position; p += 2) {
+      const y = staffTop + 40 - p * 5;
+      svg.appendChild(svgEl('line', { x1:x-10, x2:x+10, y1:y, y2:y, stroke:ink, 'stroke-width':1.2 }));
+    }
+  }
+}
+
+function drawClef(svg, clef, staffTop, showTime, numerator, denominator) {
+  const isBass = clef === 'bass';
+  svg.appendChild(svgEl('text', {
+    x:isBass ? 22 : 16,
+    y:isBass ? staffTop + 37 : staffTop + 46,
+    'font-size':isBass ? 43 : 55,
+    'font-family':'Segoe UI Symbol, Noto Music, serif',
+    fill:'#24202a',
+  }, isBass ? '𝄢' : '𝄞'));
+
+  if (showTime) {
+    const x = 61;
+    svg.appendChild(svgEl('text', {
+      x, y:staffTop + 17, 'text-anchor':'middle', 'font-size':16,
+      'font-family':'Georgia, serif', 'font-weight':'700', fill:'#24202a',
+    }, String(numerator)));
+    svg.appendChild(svgEl('text', {
+      x, y:staffTop + 36, 'text-anchor':'middle', 'font-size':16,
+      'font-family':'Georgia, serif', 'font-weight':'700', fill:'#24202a',
+    }, String(denominator)));
+  }
+}
+
+const NOTE_TONE = {
+  default: '#24202a',
+  inactive: '#d4cfd6',
+  target: '#4c8bc7',
+  current: '#6c3fc5',
+  done: '#1a9b6d',
+  mistake: '#d88732',
+};
+
+function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'default', annotation = null, stackIndex = 0) {
+  const position = staffPosition(note.midi, clef);
+  const y = noteY(note.midi, clef, staffTop);
+  const duration = note.duration;
+  const hollow = duration >= 1.75;
+  const whole = duration >= 3.75;
+  const stemUp = position <= 4;
+  const ink = NOTE_TONE[tone] || NOTE_TONE.default;
+
+  drawLedgerLines(svg, x, position, staffTop, ink);
+
+  if ([1,3,6,8,10].includes(note.midi % 12)) {
+    svg.appendChild(svgEl('text', {
+      x:x-13, y:y+5, 'text-anchor':'middle', 'font-size':16,
+      'font-family':'Segoe UI Symbol, serif', fill:ink,
+    }, '♯'));
+  }
+
+  svg.appendChild(svgEl('ellipse', {
+    cx:x, cy:y, rx:6.2, ry:4.5,
+    transform:`rotate(-16 ${x} ${y})`,
+    fill:hollow ? '#fff' : ink,
+    stroke:ink, 'stroke-width':hollow ? 1.8 : 1,
+  }));
+
+  if (!whole) {
+    const stemX = stemUp ? x + 5.5 : x - 5.5;
+    const stemEndY = stemUp ? y - 30 : y + 30;
+    svg.appendChild(svgEl('line', {
+      x1:stemX, x2:stemX, y1:y, y2:stemEndY,
+      stroke:ink, 'stroke-width':1.5,
+    }));
+
+    if (duration <= 0.75) {
+      const path = stemUp
+        ? `M ${stemX} ${stemEndY} Q ${stemX+13} ${stemEndY+5} ${stemX+9} ${stemEndY+17}`
+        : `M ${stemX} ${stemEndY} Q ${stemX-13} ${stemEndY-5} ${stemX-9} ${stemEndY-17}`;
+      svg.appendChild(svgEl('path', {
+        d:path, fill:'none', stroke:ink, 'stroke-width':2.2, 'stroke-linecap':'round',
+      }));
+    }
+  }
+
+  if ([0.75,1.5,3].some(value => Math.abs(duration - value) < 0.08)) {
+    svg.appendChild(svgEl('circle', { cx:x+10, cy:y, r:1.8, fill:ink }));
+  }
+
+  if (showNames) {
+    svg.appendChild(svgEl('text', {
+      x, y:staffTop + 83, 'text-anchor':'middle', 'font-size':9.5,
+      'font-family':'Arial, sans-serif', 'font-weight':'600', fill:'#7b7188',
+    }, midiName(note.midi)));
+  }
+
+  if (annotation?.letter && stackIndex === 0) {
+    svg.appendChild(svgEl('text', {
+      x, y:staffTop + 76, 'text-anchor':'middle', 'font-size':11,
+      'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
+    }, annotation.letter));
+  }
+
+  // 指法数字样式统一：只要显示就带框（曲目库预览与练习评分页一致），不再区分来源。
+  const displayedFinger = annotation?.finger ?? fingerNum;
+  if (displayedFinger) {
+    const fy = clef === 'treble'
+      ? (stemUp ? y - 38 : y - 16)
+      : (stemUp ? y + 44 : y + 22);
+    // 同一时刻多个音符（和弦/双音）按 stackIndex 依次向上错开，避免指法框重叠。
+    const boxY = Math.min(fy, staffTop - 8) - stackIndex * 20;
+    svg.appendChild(svgEl('rect', {
+      x:x-10, y:boxY-14, width:20, height:18, rx:2,
+      fill:'#fff', stroke:ink, 'stroke-width':1.4,
+    }));
+    svg.appendChild(svgEl('text', {
+      x, y:boxY-1, 'text-anchor':'middle', 'font-size':11,
+      'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
+    }, String(displayedFinger)));
+  }
+}
+
+function splitRestGap(start, duration, beatsPerMeasure) {
+  const rests = [];
+  let cursor = start;
+  let remaining = duration;
+  const choices = [4, 2, 1, 0.5];
+
+  while (remaining >= 0.49) {
+    const offset = ((cursor % beatsPerMeasure) + beatsPerMeasure) % beatsPerMeasure;
+    const toBoundary = Math.abs(offset) < 0.01 ? beatsPerMeasure : beatsPerMeasure - offset;
+    const available = Math.min(remaining, toBoundary);
+    const piece = choices.find(value => value <= available + 0.01);
+    if (!piece) break;
+    rests.push({ start:cursor, duration:piece });
+    cursor += piece;
+    remaining -= piece;
+  }
+  return rests;
+}
+
+function buildRests(track, totalBeats, beatsPerMeasure) {
+  const rests = [];
+  let cursor = 0;
+  for (const note of track.notes) {
+    if (note.start - cursor >= 0.49) {
+      rests.push(...splitRestGap(cursor, note.start - cursor, beatsPerMeasure));
+    }
+    cursor = Math.max(cursor, note.start + note.duration);
+  }
+  if (totalBeats - cursor >= 0.49) {
+    rests.push(...splitRestGap(cursor, totalBeats - cursor, beatsPerMeasure));
+  }
+  return rests;
+}
+
+function drawRest(svg, rest, x, staffTop) {
+  const duration = rest.duration;
+  if (duration >= 3.75) {
+    svg.appendChild(svgEl('rect', { x:x-7, y:staffTop+10, width:14, height:5, fill:'#24202a' }));
+  } else if (duration >= 1.75) {
+    svg.appendChild(svgEl('rect', { x:x-7, y:staffTop+15, width:14, height:5, fill:'#24202a' }));
+  } else if (duration >= 0.75) {
+    svg.appendChild(svgEl('path', {
+      d:`M ${x-3} ${staffTop+6} l 7 8 l -6 7 l 7 7 l -7 10`,
+      fill:'none', stroke:'#24202a', 'stroke-width':2.3,
+      'stroke-linecap':'round', 'stroke-linejoin':'round',
+    }));
+  } else {
+    svg.appendChild(svgEl('circle', { cx:x+3, cy:staffTop+13, r:2.8, fill:'#24202a' }));
+    svg.appendChild(svgEl('path', {
+      d:`M ${x+2} ${staffTop+15} Q ${x+1} ${staffTop+25} ${x-5} ${staffTop+32}`,
+      fill:'none', stroke:'#24202a', 'stroke-width':1.8, 'stroke-linecap':'round',
+    }));
+  }
+}
+
+function drawStaff(svg, options) {
+  const {
+    track, rests, clef, staffTop, width, contentX, measureWidth,
+    systemStart, systemEnd, beatsPerMeasure, systemMeasures,
+    showTime, numerator, denominator, showNames, finalSystem, fingering, noteToneFor, noteAnnotationFor,
+  } = options;
+
+  for (let line = 0; line < 5; line++) {
+    const y = staffTop + line * 10;
+    svg.appendChild(svgEl('line', {
+      x1:10, x2:width-10, y1:y, y2:y,
+      stroke:'#514b56', 'stroke-width':0.9,
+    }));
+  }
+
+  drawClef(svg, clef, staffTop, showTime, numerator, denominator);
+
+  for (let measure = 0; measure <= systemMeasures; measure++) {
+    const x = contentX + measure * measureWidth;
+    svg.appendChild(svgEl('line', {
+      x1:x, x2:x, y1:staffTop, y2:staffTop+40,
+      stroke:'#514b56', 'stroke-width':measure === 0 ? 1.1 : 1.25,
+    }));
+  }
+
+  if (finalSystem) {
+    const x = contentX + systemMeasures * measureWidth;
+    svg.appendChild(svgEl('line', {
+      x1:x-4, x2:x-4, y1:staffTop, y2:staffTop+40,
+      stroke:'#24202a', 'stroke-width':1.2,
+    }));
+    svg.lastChild.previousSibling.setAttribute('stroke-width', '3');
+  }
+
+  const beatWidth = measureWidth / beatsPerMeasure;
+  const xForBeat = beat => contentX + (beat - systemStart + 0.31) * beatWidth;
+
+  for (const rest of rests) {
+    if (rest.start >= systemStart - 0.001 && rest.start < systemEnd - 0.001) {
+      drawRest(svg, rest, xForBeat(rest.start), staffTop);
+    }
+  }
+  const notesBefore = fingering
+    ? track.notes.filter(n => n.start < systemStart - 0.001).length
+    : 0;
+  let noteIdx = notesBefore;
+  let lastChordStart = null;
+  let stackIndex = 0;
+  for (const note of track.notes) {
+    if (note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001) {
+      const fingerNum = fingering ? fingering[noteIdx] : null;
+      const tone = noteToneFor ? noteToneFor(note) : 'default';
+      const annotation = noteAnnotationFor ? noteAnnotationFor(note, track) : null;
+      // 和弦/双音等同一时刻多个音符：按音高从低到高依次错开，避免指法框/音名标签互相覆盖。
+      stackIndex = note.start === lastChordStart ? stackIndex + 1 : 0;
+      lastChordStart = note.start;
+      drawNote(svg, note, xForBeat(note.start), clef, staffTop, showNames && stackIndex === 0, fingerNum, tone, annotation, stackIndex);
+      noteIdx++;
+    }
+  }
+}
+
+function buildStaffSvg(score, width, showNames, options = {}) {
+  const midiPath = state.activeSong?.midi || '';
+  const fingeringData = FINGERING[midiPath] || {};
+  const lessonMode = options.lessonMode === true;
+  const right = score.tracks.find(track => track.role === 'right') || score.tracks[0];
+  const left = score.tracks.find(track => track.role === 'left');
+  const hasBass = !!left;
+  const beatsPerMeasure = score.numerator * (4 / score.denominator);
+  const measureCount = Math.max(1, Math.ceil((score.totalBeats - 0.001) / beatsPerMeasure));
+  const compactLandscape = window.innerWidth > window.innerHeight && window.innerHeight <= 600;
+  const measuresPerSystem = compactLandscape
+    ? (width >= 540 ? 3 : 2)
+    : (width < 520 ? 1 : width < 900 ? 2 : 3);
+  const systemCount = Math.ceil(measureCount / measuresPerSystem);
+  const systemHeight = lessonMode
+    ? (compactLandscape ? (hasBass ? 220 : 132) : (hasBass ? 250 : 150))
+    : (compactLandscape ? (hasBass ? 198 : 110) : (hasBass ? 222 : 122));
+  // lessonMode 下要给和弦/双音等同一时刻多个指法框（最多按 3 音堆叠）留出空间，避免顶部被裁切。
+  const topPadding = lessonMode ? 48 : 8;
+  const viewWidth = Math.max(300, width);
+  const viewHeight = topPadding + systemCount * systemHeight;
+  const contentX = 78;
+  const svg = svgEl('svg', {
+    viewBox:`0 0 ${viewWidth} ${viewHeight}`,
+    role:'img',
+    'aria-label':`${score.title} 五线谱`,
+    class:'staff-score',
+  });
+  svg.appendChild(svgEl('title', {}, `${score.title} 五线谱`));
+
+  const rightRests = buildRests(right, score.totalBeats, beatsPerMeasure);
+  const leftRests = left ? buildRests(left, score.totalBeats, beatsPerMeasure) : [];
+
+  for (let system = 0; system < systemCount; system++) {
+    const startMeasure = system * measuresPerSystem;
+    const systemMeasures = Math.min(measuresPerSystem, measureCount - startMeasure);
+    const systemStart = startMeasure * beatsPerMeasure;
+    const systemEnd = (startMeasure + systemMeasures) * beatsPerMeasure;
+    const systemTop = topPadding + system * systemHeight;
+    const trebleTop = systemTop + 18;
+    const bassTop = trebleTop + (compactLandscape ? 92 : 104);
+    const measureWidth = (viewWidth - contentX - 12) / systemMeasures;
+
+    if (!lessonMode) {
+      for (let measure = 0; measure < systemMeasures; measure++) {
+        svg.appendChild(svgEl('text', {
+          x:contentX + measure * measureWidth + 5,
+          y:trebleTop - 6,
+          'font-size':9,
+          'font-family':'Arial, sans-serif',
+          fill:'#988fa1',
+        }, String(startMeasure + measure + 1)));
+      }
+    }
+
+    if (hasBass) {
+      svg.appendChild(svgEl('line', {
+        x1:10, x2:10, y1:trebleTop, y2:bassTop+40,
+        stroke:'#24202a', 'stroke-width':2,
+      }));
+      svg.appendChild(svgEl('path', {
+        d:`M 14 ${trebleTop} Q 3 ${trebleTop+28} 14 ${trebleTop+52} Q 3 ${bassTop+12} 14 ${bassTop+40}`,
+        fill:'none', stroke:'#6c3fc5', 'stroke-width':1.5,
+      }));
+    }
+
+    const common = {
+      width:viewWidth,
+      contentX,
+      measureWidth,
+      systemStart,
+      systemEnd,
+      beatsPerMeasure,
+      systemMeasures,
+      showTime:system === 0,
+      numerator:score.numerator,
+      denominator:score.denominator,
+      showNames,
+      finalSystem:system === systemCount - 1,
+      noteToneFor:options.noteToneFor,
+      noteAnnotationFor:options.noteAnnotationFor,
+    };
+
+    const currentNote = Number.isInteger(options.currentEventIndex)
+      ? [right, left].filter(Boolean).flatMap(track => track.notes)
+        .find(note => note.eventIndex === options.currentEventIndex && note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001)
+      : null;
+    const pointerX = currentNote
+      ? contentX + (currentNote.start - systemStart + 0.31) * (measureWidth / beatsPerMeasure)
+      : null;
+    if (pointerX != null) {
+      svg.appendChild(svgEl('rect', {
+        x:pointerX - 10, y:trebleTop - 3, width:20,
+        height:(left ? bassTop + 43 : trebleTop + 43) - (trebleTop - 3),
+        fill:'#6c3fc5', opacity:'0.10',
+      }));
+    }
+
+    drawStaff(svg, {
+      ...common, track:right, rests:rightRests, clef:'treble', staffTop:trebleTop,
+      fingering: fingeringData.right || null,
+    });
+    if (left) {
+      drawStaff(svg, {
+        ...common, track:left, rests:leftRests, clef:'bass', staffTop:bassTop,
+        fingering: fingeringData.left || null,
+      });
+    }
+    if (pointerX != null) {
+      const px = pointerX - 22;  // 左移，与手指框并排而非堆叠
+      svg.appendChild(svgEl('text', {
+        x:px, y:trebleTop-26, 'text-anchor':'middle', 'font-size':9,
+        'font-family':'Arial, sans-serif', 'font-weight':'800', fill:'#6c3fc5',
+      }, '现在'));
+      svg.appendChild(svgEl('path', {
+        d:`M ${px-6} ${trebleTop-22} L ${px+6} ${trebleTop-22} L ${px} ${trebleTop-13} Z`,
+        fill:'#6c3fc5',
+      }));
+    }
+  }
+
+  return svg;
+}
+
+function renderActiveScore() {
+  const mount = document.getElementById('scoreMount');
+  if (!mount || !state.activeSong?.midi) return;
+
+  if (scoreState.status === 'loading') {
+    mount.innerHTML = '<div class="score-status">正在从 MIDI 生成五线谱…</div>';
+    return;
+  }
+  if (scoreState.status === 'error') {
+    mount.innerHTML = `<div class="score-status">五线谱读取失败<br>${scoreState.error}</div>`;
+    return;
+  }
+
+  const score = scoreState.library[state.activeSong.midi];
+  if (!score) {
+    mount.innerHTML = '<div class="score-status">没有找到这首曲目的 MIDI 五线谱数据</div>';
+    return;
+  }
+
+  const width = Math.max(300, Math.floor(mount.getBoundingClientRect().width));
+  mount.replaceChildren(buildStaffSvg(score, width, state.showNoteNames));
+  const facts = document.getElementById('scoreFacts');
+  if (facts) {
+    const hands = score.tracks.some(track => track.role === 'left') ? '双手大谱表' : '右手高音谱表';
+    facts.textContent = `${score.numerator}/${score.denominator} 拍 · ♩=${score.bpm} · ${hands} · ${Math.ceil(score.totalBeats / (score.numerator * (4 / score.denominator)))} 小节`;
+  }
+}
+
+function practiceNoteTone(note, p) {
+  if (!Number.isInteger(note.eventIndex)) return 'inactive';
+  const localIndex = p?.sheet?.eventIndexToLocal?.get(note.eventIndex);
+  if (!Number.isInteger(localIndex)) return 'inactive';
+  const currentIndex = p.session?.getEventIndex() ?? 0;
+  if (localIndex < currentIndex) {
+    return p.result?.mistakeEventIndexes?.includes(localIndex) ? 'mistake' : 'done';
+  }
+  if (!p.finished && localIndex === currentIndex) return 'current';
+  return 'target';
+}
+
+function practiceLetterName(midi) {
+  const octave = Math.floor(midi / 12) - 1;
+  return `${PITCH_NAMES[((midi % 12) + 12) % 12]}${octave}`;
+}
+
+// 指法标注样式统一：只要显示指法数字（或"换"），一律带框；不再区分"本关目标/前后参考"。
+// 优先级：人工标注的 FINGERING 表（覆盖整条曲子）> 本关范围内的自动推算（suggestedFinger，
+// 以本关第一个音为锚点，只在本关范围内可靠 —— 离锚点越远的音，自动推算越不准，所以本关范围外
+// 没有人工标注时不显示，避免给出误导性的指法建议）。
+function practiceScoreAnnotation(note, track, p) {
+  const letter = practiceLetterName(note.midi);
+  const hand = track.role === 'left' ? 'left' : 'right';
+
+  // 手动 FINGERING 表（按音符在轨道中的顺序索引）；专项特训的指法来自 /api/drills（见 state.drillFingering）
+  const fd = (FINGERING_BY_COURSE[p?.courseId] || FINGERING[SONGS.find(s => s.id === p?.courseId)?.midi || ''] || state.drillFingering[p?.courseId])?.[hand];
+  const noteIdx = fd ? track.notes.findIndex(n => n.start === note.start && n.midi === note.midi) : -1;
+  const explicitFinger = (noteIdx >= 0 && fd) ? fd[noteIdx] : null;
+
+  if (explicitFinger != null) {
+    return { letter, finger: explicitFinger, boxedFinger: true };
+  }
+
+  const localIndex = p?.sheet?.eventIndexToLocal?.get(note.eventIndex);
+  if (!Number.isInteger(localIndex)) return { letter };
+
+  const eventNote = p.events?.[localIndex]?.notes?.find(candidate => candidate.hand === hand && candidate.note === note.midi);
+  if (!eventNote) return { letter };
+
+  const finger = suggestedFinger(eventNote, p);
+  if (finger.number == null && !finger.needsShift) return { letter };
+  return {
+    letter,
+    finger: finger.needsShift ? '换' : finger.number,
+    boxedFinger: true,
+  };
+}
+
+function renderPracticeScore(p) {
+  const mount = document.getElementById('practiceScoreMount');
+  if (!mount || !p?.sheet?.score) return;
+  const width = Math.max(300, Math.floor(mount.getBoundingClientRect().width));
+  const currentEventIndex = p.finished
+    ? null
+    : p.sheet.targetEventIndexes?.[p.session?.getEventIndex() ?? -1];
+  mount.replaceChildren(buildStaffSvg(p.sheet.score, width, false, {
+    lessonMode:true,
+    currentEventIndex,
+    noteToneFor:note => practiceNoteTone(note, p),
+    noteAnnotationFor:(note, track) => practiceScoreAnnotation(note, track, p),
+  }));
+}
+
+function renderPracticeScorePanel(p) {
+  if (!p?.sheet?.score) {
+    return `<section class="practice-sheet"><div class="score-status">正在生成整曲谱面…</div></section>`;
+  }
+  return `
+    <section class="practice-sheet lesson-score" aria-label="整曲练习谱面">
+      <div class="practice-sheet-head">
+        <strong>课堂练习谱</strong>
+        <span>上方五线谱 · 下方 C D E F G A B · 本关 ${p.events.length} 个事件已点亮</span>
+      </div>
+      <div class="score-paper"><div class="score-mount" id="practiceScoreMount"></div></div>
+      <div class="practice-score-legend">
+        <span><i></i>非本关</span><span><i class="target"></i>本关目标</span><span><i class="current"></i>当前事件</span><span><i class="pointer"></i>现在弹这里</span><span><i class="done"></i>已完成</span>
+      </div>
+    </section>`;
+}
+
+async function loadStaffScores() {
+  try {
+    const response = await fetch('/api/scores', { cache:'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    scoreState.library = await response.json();
+    scoreState.status = 'ready';
+  } catch (error) {
+    scoreState.status = 'error';
+    scoreState.error = error.message || '未知错误';
+  }
+  if (state.view === 'detail') renderActiveScore();
 }
 
 function profDot(songId) {
@@ -509,49 +1348,58 @@ function renderTasks() {
 
 function renderDetailFullscreen(song) {
   const p = state.proficiency[song.id] ?? 0;
+  const meta = LEVEL_META[song.level];
 
   const profBtns = PROF.map((pf, i) =>
-    `<div class="sf-prof-btn ${pf.cls}${i===p?' sel':''}" onclick="setProf('${song.id}',${i})">${pf.icon} ${pf.label}</div>`
+    `<div class="sf-prof-btn ${pf.cls}${i===p?' sel':''}" onclick="setProf('${song.id}',${i})">
+      <span class="pf-icon">${pf.icon}</span>
+      <span class="pf-label">${pf.label}</span>
+    </div>`
   ).join('');
 
   let sheetBody = '';
   if (song.isBoss) {
-    sheetBody = `<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:60px;margin-bottom:12px">🏆</div>
-      <div style="font-size:20px;font-weight:700;margin-bottom:8px">${song.title}</div>
-      <div style="color:var(--muted)">完成 Lv.4 全部曲目后解锁</div>
+    sheetBody = `<div style="text-align:center;padding:60px 20px">
+      <div style="font-size:64px;margin-bottom:16px">🏆</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:10px">${song.title}</div>
+      <div style="color:var(--muted);font-size:14px">完成 Lv.4 全部曲目后解锁</div>
     </div>`;
   } else {
-    const hasLeft = song.notation.left && song.notation.left.length;
-    if (hasLeft) {
-      sheetBody += `<div class="sheet-label">右手</div>`;
-      sheetBody += song.notation.right.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
-      sheetBody += `<div class="sheet-label" style="margin-top:14px">左手</div>`;
-      sheetBody += song.notation.left.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
-    } else {
-      sheetBody += `<div class="sheet-label">右手旋律</div>`;
-      sheetBody += song.notation.right.map(r=>`<div class="sheet-row">${colorNote(r)}</div>`).join('');
-    }
-    sheetBody += `<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-      <span style="font-size:11px;color:var(--muted)">实心数字 = 1拍</span>
-      <span style="font-size:11px;color:#ccc">— = 2拍撑住</span>
-    </div>`;
+    sheetBody = `
+      <div class="score-guide">
+        <span class="score-key"><span class="clef-mini">𝄞</span><strong>右手</strong> 高音谱号</span>
+        <span class="score-key"><span class="clef-mini">𝄢</span><strong>左手</strong> 低音谱号</span>
+        <span class="score-key"><strong>♯</strong> 升半音</span>
+        <span class="score-key"><strong>● / ○</strong> 四分音符 / 二分音符</span>
+      </div>
+      <div class="score-card">
+        <div class="score-toolbar">
+          <div class="score-facts" id="scoreFacts">正在读取 MIDI 节拍与声部…</div>
+          <button class="note-toggle" onclick="toggleNoteNames()">${state.showNoteNames ? '隐藏音名' : '显示音名'}</button>
+        </div>
+        <div class="score-paper">
+          <div class="score-mount" id="scoreMount">
+            <div class="score-status">正在从 MIDI 生成五线谱…</div>
+          </div>
+        </div>
+        <div class="score-foot">
+          <span>从左向右读谱，小节号标在每行上方</span>
+          <span>实心带符干 = 四分/八分音符</span>
+          <span>空心音符 = 二分音符</span>
+        </div>
+      </div>
+      ${song.midi ? `<div class="midi-source"><strong>练习文件</strong> practice_midis/${song.midi}</div>` : ''}`;
   }
 
-  const hidden = !!state.controlsHidden;
-  return `<div class="sf-wrap"><div class="sf-inner">
-    ${hidden ? '' : `
+  return `<div class="sf-wrap">
     <div class="sf-hdr">
       <span class="sf-hdr-back" onclick="goBack()">‹</span>
       <span class="sf-hdr-title">${song.title}</span>
-      <span class="sf-hdr-hide" onclick="toggleControls()">全屏</span>
+      <span class="sf-hdr-sub" onclick="toggleLandscapeProf()" title="横屏时点击修改熟练度">${meta.name} · ${PROF[p].label}⌄</span>
     </div>
-    <div class="sf-prof">${profBtns}</div>`}
-    <div class="sf-body">
-      ${hidden ? `<div class="sf-float" onclick="toggleControls()">‹ 返回</div>` : ''}
-      ${sheetBody}
-    </div>
-  </div></div>`;
+    <div class="sf-prof">${profBtns}</div>
+    <div class="sf-body">${sheetBody}</div>
+  </div>`;
 }
 
 // ═══════════════════════════════════════
@@ -565,6 +1413,7 @@ function render() {
   // 曲目详情：全屏横版
   if (view === 'detail' && activeSong) {
     root.innerHTML = renderDetailFullscreen(activeSong);
+    requestAnimationFrame(renderActiveScore);
     return;
   }
 
@@ -577,11 +1426,29 @@ function render() {
   } else if (view === 'tasks') {
     hdrTitle = '📋 本周计划';
     body = renderTasks();
+  } else if (view === 'courses') {
+    hdrTitle = '🎯 课程';
+    body = renderCourses();
+  } else if (view === 'import') {
+    hdrTitle = '➕ 导入新曲目';
+    body = renderImport();
+  } else if (view === 'course-detail') {
+    hdrTitle = state.activeCourse ? state.activeCourse.title : '课程';
+    body = renderCourseDetail();
+  } else if (view === 'practice-session') {
+    hdrTitle = state.practice?.lesson ? state.practice.lesson.title : '评分练习';
+    body = renderPracticeSession();
   }
 
+  const showBack = view==='import'||view==='course-detail'||view==='practice-session';
+  const backFn = view==='practice-session' ? 'exitPracticeSession' : 'backToCourses';
   root.innerHTML = `
-    <div class="hdr"><div class="hdr-title">${hdrTitle}</div></div>
+    <div class="hdr">
+      ${showBack ? `<div class="hdr-back" onclick="${backFn}()">‹</div>` : ''}
+      <div class="hdr-title">${hdrTitle}</div>
+    </div>
     <div class="content">${body}</div>
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ''}
     <div class="tab-bar">
       <div class="tab${view==='songs'?' active':''}" onclick="setView('songs')">
         <span class="icon">🎵</span>曲目库
@@ -589,7 +1456,11 @@ function render() {
       <div class="tab${view==='tasks'?' active':''}" onclick="setView('tasks')">
         <span class="icon">📋</span>本周计划
       </div>
+      <div class="tab${(view==='courses'||view==='import'||view==='course-detail'||view==='practice-session')?' active':''}" onclick="setView('courses')">
+        <span class="icon">🎯</span>课程
+      </div>
     </div>`;
+  if (view === 'practice-session') requestAnimationFrame(() => renderPracticeScore(state.practice));
 }
 
 // ═══════════════════════════════════════
@@ -597,8 +1468,22 @@ function render() {
 // ═══════════════════════════════════════
 
 function setView(v) {
+  if (state.view === 'practice-session' && v !== 'practice-session') {
+    clearPracticeCountdown(state.practice);
+    disconnectPracticeMidi();
+    state.practice = null;
+  }
   state.view = v;
   state.activeSong = null;
+  render();
+  if (v === 'courses' && !state.coursesLoaded) loadCourses();
+}
+
+function backToCourses() {
+  state.view = 'courses';
+  state.activeCourseId = null;
+  state.activeCourse = null;
+  state.import = null;
   render();
 }
 
@@ -606,7 +1491,6 @@ function openSong(id) {
   state.activeSong = SONGS.find(s => s.id === id);
   state.view = 'detail';
   render();
-  document.querySelector('.content').scrollTop = 0;
 }
 
 function goBack() {
@@ -621,14 +1505,21 @@ function setProf(id, level) {
   render();
 }
 
+function toggleNoteNames() {
+  state.showNoteNames = !state.showNoteNames;
+  localStorage.setItem('piano_note_names', state.showNoteNames ? '1' : '0');
+  const button = document.querySelector('.note-toggle');
+  if (button) button.textContent = state.showNoteNames ? '隐藏音名' : '显示音名';
+  renderActiveScore();
+}
+
+function toggleLandscapeProf() {
+  document.querySelector('.sf-prof')?.classList.toggle('landscape-open');
+}
+
 function toggleTask(id) {
   state.doneTasks[id] = !state.doneTasks[id];
   saveTasks();
-  render();
-}
-
-function toggleControls() {
-  state.controlsHidden = !state.controlsHidden;
   render();
 }
 
@@ -638,10 +1529,1008 @@ function toggleDay(day) {
 }
 
 // ═══════════════════════════════════════
+//  COURSES (课程系统)
+// ═══════════════════════════════════════
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  state.toast = msg;
+  render();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { state.toast = ''; render(); }, 3200);
+}
+
+async function apiGet(path) {
+  const res = await fetch(path);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
+  return data;
+}
+async function apiPost(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`);
+  return data;
+}
+
+async function loadCourses() {
+  state.coursesLoaded = true;
+  try {
+    const [courseResult, settingsResult, drillsResult] = await Promise.allSettled([
+      apiGet('/api/courses'),
+      apiGet('/api/settings'),
+      apiGet('/api/drills'),
+    ]);
+    if (courseResult.status !== 'fulfilled') throw courseResult.reason;
+    state.courses = courseResult.value.courses;
+    if (settingsResult.status === 'fulfilled') state.settings = settingsResult.value || {};
+    if (drillsResult.status === 'fulfilled') {
+      state.drillFingering = {};
+      for (const d of drillsResult.value.drills || []) state.drillFingering[d.id] = d.fingering;
+    }
+  } catch (e) {
+    showToast('加载课程失败：' + e.message);
+  }
+  render();
+}
+
+const HAND_LABEL = { left: '左手', right: '右手', both: '双手' };
+const STAGE_LABEL = { A: '阶段 A · 单手熟悉', B: '阶段 B · 双手合练', C: '阶段 C · 扩大范围', manual: '自定义关卡' };
+
+function courseProgress(course) {
+  if (!course.lessons.length) return 0;
+  return Math.round((course.lessons.filter(l => l.completed).length / course.lessons.length) * 100);
+}
+
+function getRecommendedPractice() {
+  const settings = state.settings || {};
+  const lastCourse = state.courses.find(course => course.course_id === settings.lastCourseId);
+  const defaultCourse = state.courses.find(course => course.course_id === 'twinkle_both');
+  const candidates = [lastCourse, defaultCourse, ...state.courses].filter((course, index, all) =>
+    course && all.indexOf(course) === index,
+  );
+
+  for (const course of candidates) {
+    const storedLesson = course.course_id === settings.lastCourseId
+      ? course.lessons.find(lesson => lesson.lesson_id === settings.lastLessonId && lesson.unlocked && !lesson.completed)
+      : null;
+    const lesson = storedLesson || course.lessons.find(item => item.unlocked && !item.completed);
+    if (lesson) return { course, lesson, isResume: Boolean(storedLesson) };
+  }
+  return null;
+}
+
+function courseCard(c) {
+  return `
+    <div class="course-card" onclick="openCourse('${c.course_id}')">
+      <div class="course-card-title">${escapeHtml(c.title)}</div>
+      <div class="course-card-sub">${c.bpm} BPM · ${c.measure_count} 小节 · ${c.lessons.filter(l=>l.completed).length}/${c.lessons.length} 关卡完成</div>
+      <div class="course-progress-track"><div class="course-progress-fill" style="width:${courseProgress(c)}%"></div></div>
+    </div>
+  `;
+}
+
+function renderCourses() {
+  if (!state.coursesLoaded) return `<div class="empty-hint">加载中…</div>`;
+  const recommended = getRecommendedPractice();
+  const songs = state.courses.filter(c => c.category !== 'drill');
+  const fingeringDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'fingering');
+  const techniqueDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'technique');
+  const songCards = songs.map(courseCard).join('');
+  const fingeringCards = fingeringDrills.map(courseCard).join('');
+  const techniqueCards = techniqueDrills.map(courseCard).join('');
+  return `
+    ${recommended ? `
+      <div class="course-resume">
+        <div class="course-resume-kicker">${recommended.isResume ? '继续练习' : '推荐课程'}</div>
+        <div class="course-resume-title">${escapeHtml(recommended.course.title)} · ${escapeHtml(recommended.lesson.title)}</div>
+        <div class="course-resume-meta">${HAND_LABEL[recommended.lesson.hand_mode] || recommended.lesson.hand_mode} · ${Math.round(recommended.lesson.speed * 100)}% 速度 · 等待模式</div>
+        <div class="course-resume-actions">
+          <button class="btn btn-primary" onclick="openPracticeSession('${recommended.course.course_id}','${recommended.lesson.lesson_id}')">开始评分练习</button>
+          <button class="btn btn-secondary" onclick="openCourse('${recommended.course.course_id}')">课程详情</button>
+        </div>
+      </div>
+    ` : ''}
+    <div class="course-list-heading">曲目课程</div>
+    ${songCards || '<div class="empty-hint">还没有可练的曲目课程。</div>'}
+    ${fingeringDrills.length ? `
+      <div class="course-list-heading">🖐️ 指法训练</div>
+      ${fingeringCards}
+    ` : ''}
+    ${techniqueDrills.length ? `
+      <div class="course-list-heading">🎹 基本功训练</div>
+      ${techniqueCards}
+    ` : ''}
+    <div class="add-course-btn" onclick="startImport()">
+      <span>＋</span><span>添加自己的 MIDI（可选）</span>
+    </div>
+  `;
+}
+
+// ── Import wizard ──
+
+function startImport() {
+  state.import = { step: 'pick', midiList: null, source: null, analysis: null, title: '', leftTrackIndex: null, rightTrackIndex: null, error: '', busy: false };
+  state.view = 'import';
+  render();
+  apiGet('/api/midi/list').then(({ files }) => {
+    if (state.import) { state.import.midiList = files; render(); }
+  }).catch(e => { if (state.import) { state.import.error = e.message; render(); } });
+}
+
+async function pickExistingMidi(relativePath) {
+  if (!relativePath || !state.import) return;
+  state.import.busy = true; state.import.error = '';
+  render();
+  try {
+    const { absolutePath, analysis } = await apiPost('/api/midi/analyze', { path: relativePath });
+    applyAnalysis(absolutePath, analysis);
+  } catch (e) {
+    state.import.error = e.message;
+  }
+  state.import.busy = false;
+  render();
+}
+
+async function uploadMidiFile(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file || !state.import) return;
+  state.import.busy = true; state.import.error = '';
+  render();
+  try {
+    const bytes = await file.arrayBuffer();
+    const res = await fetch(`/api/midi/upload?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '上传失败');
+    applyAnalysis(data.absolutePath, data.analysis);
+  } catch (e) {
+    state.import.error = e.message;
+  }
+  state.import.busy = false;
+  render();
+}
+
+function applyAnalysis(absolutePath, analysis) {
+  const imp = state.import;
+  imp.source = absolutePath;
+  imp.analysis = analysis;
+  imp.title = analysis.title;
+  const right = analysis.tracks.find(t => t.roleGuess === 'right' && t.noteCount > 0);
+  const left = analysis.tracks.find(t => t.roleGuess === 'left' && t.noteCount > 0);
+  imp.rightTrackIndex = right ? right.index : (analysis.tracks.find(t=>t.noteCount>0)?.index ?? null);
+  imp.leftTrackIndex = left ? left.index : null;
+  imp.step = 'assign';
+}
+
+function updateImportField(field, value) {
+  if (!state.import) return;
+  state.import[field] = (field === 'leftTrackIndex' || field === 'rightTrackIndex') ? Number(value) : value;
+}
+
+async function submitCreateCourse() {
+  const imp = state.import;
+  if (!imp) return;
+  if (imp.leftTrackIndex === imp.rightTrackIndex) {
+    imp.error = '左右手不能选择同一个音轨';
+    render();
+    return;
+  }
+  imp.busy = true; imp.error = '';
+  render();
+  try {
+    const { course } = await apiPost('/api/courses', {
+      title: imp.title,
+      sourceMidiPath: imp.source,
+      leftTrackIndex: imp.leftTrackIndex,
+      rightTrackIndex: imp.rightTrackIndex,
+    });
+    state.coursesLoaded = false;
+    state.import = null;
+    await openCourse(course.course_id);
+    showToast('课程已生成：' + course.title);
+  } catch (e) {
+    imp.error = e.message;
+    imp.busy = false;
+    render();
+  }
+}
+
+function renderImport() {
+  const imp = state.import;
+  if (!imp) return '';
+  if (imp.error) {
+    var errorHtml = `<div class="error-text">${escapeHtml(imp.error)}</div>`;
+  }
+
+  if (imp.step === 'pick') {
+    const options = (imp.midiList || []).map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    return `
+      <div class="section-lbl">从曲库选择</div>
+      <div class="field">
+        <select onchange="pickExistingMidi(this.value)" ${imp.midiList ? '' : 'disabled'}>
+          <option value="">${imp.midiList ? '请选择一个 MIDI 文件…' : '加载中…'}</option>
+          ${options}
+        </select>
+      </div>
+      <div class="section-lbl">或上传本地文件</div>
+      <div class="upload-drop">
+        <input type="file" accept=".mid,.midi" onchange="uploadMidiFile(this)">
+        <div style="margin-top:8px;">选择一个 .mid 文件</div>
+      </div>
+      ${imp.busy ? '<div class="empty-hint">正在分析…</div>' : ''}
+      ${errorHtml || ''}
+    `;
+  }
+
+  // step === 'assign'
+  const a = imp.analysis;
+  const rows = a.tracks.map(t => `
+    <tr>
+      <td>${t.index}</td>
+      <td>${escapeHtml(t.name || '(未命名)')}</td>
+      <td>${t.noteCount}</td>
+      <td>${t.minPitch != null ? `${t.minPitch}–${t.maxPitch}` : '—'}</td>
+      <td>${t.roleGuess}</td>
+    </tr>
+  `).join('');
+  const trackOptions = (selected) => a.tracks.map(t =>
+    `<option value="${t.index}" ${t.index === selected ? 'selected' : ''}>#${t.index} ${escapeHtml(t.name || '(未命名)')} (${t.noteCount} 音)</option>`
+  ).join('');
+
+  return `
+    <div class="section-lbl">曲目信息</div>
+    <div class="course-card-sub" style="margin-bottom:14px;">
+      ${a.bpm} BPM · ${a.timeSignature.numerator}/${a.timeSignature.denominator} 拍 · ${a.measureCount} 小节 · 约 ${Math.round(a.durationSeconds)} 秒
+    </div>
+
+    <table class="track-table">
+      <thead><tr><th>轨道</th><th>名称</th><th>音符数</th><th>音域</th><th>猜测</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="field">
+      <label class="field-label">课程名称</label>
+      <input type="text" value="${escapeHtml(imp.title)}" oninput="updateImportField('title', this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">右手轨道</label>
+      <select onchange="updateImportField('rightTrackIndex', this.value)">${trackOptions(imp.rightTrackIndex)}</select>
+    </div>
+    <div class="field">
+      <label class="field-label">左手轨道</label>
+      <select onchange="updateImportField('leftTrackIndex', this.value)">${trackOptions(imp.leftTrackIndex)}</select>
+    </div>
+
+    ${errorHtml || ''}
+    <div class="btn-row">
+      <button class="btn btn-primary" ${imp.busy?'disabled':''} onclick="submitCreateCourse()">生成课程</button>
+      <button class="btn btn-secondary" onclick="backToCourses()">取消</button>
+    </div>
+  `;
+}
+
+// ── Course detail / lessons ──
+
+async function openCourse(courseId) {
+  state.activeCourseId = courseId;
+  state.activeCourse = null;
+  state.manualDraft = null;
+  state.view = 'course-detail';
+  render();
+  try {
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    state.activeCourse = course;
+  } catch (e) {
+    showToast('加载课程失败：' + e.message);
+  }
+  render();
+}
+
+function lessonRangeLabel(l) {
+  if (l.range_type === 'event') return `事件 ${l.start_event}–${l.end_event}`;
+  return `第 ${l.start_measure + 1}–${l.end_measure} 小节`;
+}
+
+function renderCourseDetail() {
+  const course = state.activeCourse;
+  if (!course) return `<div class="empty-hint">加载中…</div>`;
+
+  const stages = ['A', 'B', 'C', 'manual'];
+  const sections = stages.map(stage => {
+    const lessons = course.lessons.filter(l => l.stage === stage);
+    if (!lessons.length) return '';
+    const rows = lessons.map(l => {
+      const requiredRuns = requiredRunsForPracticeLesson(l);
+      const successfulRuns = successfulRunsForPracticeLesson(l);
+      return `
+        <div class="lesson-row ${l.unlocked ? '' : 'locked'}">
+          <div class="lesson-row-top">
+            <div>
+              <div class="lesson-title">${escapeHtml(l.title)}</div>
+              <div class="lesson-meta">${lessonRangeLabel(l)} · 速度 ${Math.round(l.speed*100)}% · ${l.unlocked ? (l.completed ? '已完成' : '可练习') : '未解锁'} · 达标 ${successfulRuns}/${requiredRuns} 次${l.best_score != null ? ` · 最高 ${l.best_score} 分` : ''}</div>
+            </div>
+            <div class="lesson-badges">
+              <span class="lesson-badge badge-hand-${l.hand_mode}">${HAND_LABEL[l.hand_mode]}</span>
+              ${l.completed ? '<span class="lesson-badge badge-done">✓</span>' : ''}
+            </div>
+          </div>
+          <div class="lesson-actions">
+            <button class="btn btn-primary" ${l.unlocked ? '' : 'disabled'} onclick="openPracticeSession('${course.course_id}','${l.lesson_id}')">🎯 评分练习</button>
+            <button class="btn btn-secondary" ${l.unlocked ? '' : 'disabled'} onclick="startPractice('${course.course_id}','${l.lesson_id}')">在 Neothesia 中练习</button>
+          </div>
+        </div>`;
+    }).join('');
+    return `<div class="stage-header">${STAGE_LABEL[stage]}</div>${rows}`;
+  }).join('');
+
+  return `
+    <div class="course-card-sub" style="margin-bottom:10px;">
+      ${course.bpm} BPM · ${course.measure_count} 小节 · ${course.lessons.filter(l=>l.completed).length}/${course.lessons.length} 关卡完成
+    </div>
+    <div class="course-progress-track" style="margin-bottom:16px;"><div class="course-progress-fill" style="width:${courseProgress(course)}%"></div></div>
+    ${sections}
+    ${renderManualLessonForm(course)}
+  `;
+}
+
+// ── Manual lesson creation (MVP 功能四) ──
+
+function ensureManualDraft() {
+  if (!state.manualDraft) {
+    state.manualDraft = { open: false, title: '', hand_mode: 'both', range_type: 'measure', start: 0, end: 2, speed: 0.5, busy: false, error: '' };
+  }
+  return state.manualDraft;
+}
+
+function toggleManualForm() {
+  const d = ensureManualDraft();
+  d.open = !d.open;
+  render();
+}
+
+function updateManualField(field, value) {
+  const d = ensureManualDraft();
+  d[field] = (field === 'start' || field === 'end' || field === 'speed') ? Number(value) : value;
+}
+
+async function submitManualLesson(courseId) {
+  const d = ensureManualDraft();
+  if (d.end <= d.start) { d.error = '结束位置必须大于起始位置'; render(); return; }
+  d.busy = true; d.error = '';
+  render();
+  try {
+    const spec = {
+      title: d.title || undefined,
+      hand_mode: d.hand_mode,
+      range_type: d.range_type,
+      speed: d.speed,
+    };
+    if (d.range_type === 'event') { spec.start_event = d.start; spec.end_event = d.end; }
+    else { spec.start_measure = d.start; spec.end_measure = d.end; }
+    await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons`, spec);
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    state.activeCourse = course;
+    state.manualDraft = null;
+    showToast('已添加手动关卡');
+  } catch (e) {
+    d.error = e.message;
+    d.busy = false;
+    render();
+  }
+}
+
+function renderManualLessonForm(course) {
+  const d = ensureManualDraft();
+  if (!d.open) {
+    return `<div class="btn-row" style="margin-top:18px;"><button class="btn btn-secondary" onclick="toggleManualForm()">＋ 手动添加关卡</button></div>`;
+  }
+  const unitLabel = d.range_type === 'event' ? '事件序号' : '小节序号（从 0 开始）';
+  return `
+    <div class="stage-header">手动添加关卡</div>
+    <div class="field">
+      <label class="field-label">关卡名称</label>
+      <input type="text" value="${escapeHtml(d.title)}" oninput="updateManualField('title', this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">范围类型</label>
+      <select onchange="updateManualField('range_type', this.value); render();">
+        <option value="measure" ${d.range_type==='measure'?'selected':''}>按小节</option>
+        <option value="event" ${d.range_type==='event'?'selected':''}>按音符事件</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field-label">起始${unitLabel}</label>
+      <input type="number" min="0" value="${d.start}" oninput="updateManualField('start', this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">结束${unitLabel}（不含）</label>
+      <input type="number" min="1" value="${d.end}" oninput="updateManualField('end', this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">手位</label>
+      <select onchange="updateManualField('hand_mode', this.value)">
+        <option value="both" ${d.hand_mode==='both'?'selected':''}>双手</option>
+        <option value="right" ${d.hand_mode==='right'?'selected':''}>右手</option>
+        <option value="left" ${d.hand_mode==='left'?'selected':''}>左手</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field-label">初始速度 (0.1–1.0)</label>
+      <input type="number" min="0.1" max="1" step="0.05" value="${d.speed}" oninput="updateManualField('speed', this.value)">
+    </div>
+    ${d.error ? `<div class="error-text">${escapeHtml(d.error)}</div>` : ''}
+    <div class="btn-row">
+      <button class="btn btn-primary" ${d.busy?'disabled':''} onclick="submitManualLesson('${course.course_id}')">保存关卡</button>
+      <button class="btn btn-secondary" onclick="toggleManualForm()">取消</button>
+    </div>
+  `;
+}
+
+async function startPractice(courseId, lessonId) {
+  try {
+    showToast('正在导出并启动 Neothesia…');
+    await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/practice`, {});
+    showToast('已在 Neothesia 中打开本关');
+  } catch (e) {
+    showToast('启动失败：' + e.message);
+  }
+}
+
+async function toggleLessonComplete(courseId, lessonId, completed) {
+  try {
+    await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/complete`, { completed });
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    state.activeCourse = course;
+    render();
+  } catch (e) {
+    showToast('更新失败：' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════
+//  PRACTICE SESSION (Web MIDI 实时评分，第七节 模式一：等待模式)
+// ═══════════════════════════════════════
+
+function midiNoteName(n) {
+  return `${PITCH_NAMES[((n % 12) + 12) % 12]}${Math.floor(n / 12) - 1}`;
+}
+
+const FINGER_NAMES = { 1: '拇指', 2: '食指', 3: '中指', 4: '无名指', 5: '小指' };
+const REQUIRED_RUNS_BY_STAGE = { A: 2, B: 3, C: 4, manual: 3 };
+
+function diatonicStep(midi) {
+  const pitchClass = ((midi % 12) + 12) % 12;
+  return Math.floor(midi / 12) * 7 + DIATONIC_CLASS[pitchClass];
+}
+
+function inferFingerStarts(events) {
+  const starts = {};
+  for (const event of events || []) {
+    for (const note of event.notes || []) {
+      if (!note.hand || starts[note.hand] != null) continue;
+      starts[note.hand] = diatonicStep(note.note);
+    }
+  }
+  return starts;
+}
+
+function suggestedFinger(note, p) {
+  const start = p?.fingerStarts?.[note.hand];
+  if (!Number.isFinite(start)) return { number: null, needsShift: false };
+  const distance = diatonicStep(note.note) - start;
+  const raw = note.hand === 'left' ? 5 - distance : 1 + distance;
+  if (raw < 1 || raw > 5) return { number: null, needsShift: true };
+  return { number: raw, needsShift: false };
+}
+
+function renderPracticeFingerGuide(p, event) {
+  const cards = event.notes.map(note => {
+    const hand = HAND_LABEL[note.hand] || note.hand || '本手';
+    const finger = suggestedFinger(note, p);
+    const keyboardKey = p.inputMode === 'computer-keyboard'
+      ? COMPUTER_KEYBOARD_LAYOUT.find(key => p.keyboardBaseNote + key.semitone === note.note)
+      : null;
+    const fingerText = finger.needsShift
+      ? '建议换手位'
+      : finger.number ? `第 ${finger.number} 指（${FINGER_NAMES[finger.number]}）` : '按这个琴键';
+    const keyText = keyboardKey
+      ? `电脑键盘：<kbd>${keyboardKey.label}</kbd>`
+      : `钢琴键：${midiNoteName(note.note)}`;
+    return `
+      <div class="practice-finger-card ${note.hand === 'left' ? 'left' : 'right'}">
+        <div class="practice-finger-top"><span class="practice-finger-hand">${escapeHtml(hand)}</span><span class="practice-finger-note">${midiNoteName(note.note)}</span></div>
+        <div class="practice-finger-detail">${fingerText}</div>
+        <div class="practice-finger-key">${keyText}</div>
+      </div>`;
+  }).join('');
+  return `
+    <section class="practice-finger-guide" aria-label="当前音符的手指和键位提示">
+      <div class="practice-finger-title">当前音的手指与键位</div>
+      <div class="practice-finger-list">${cards}</div>
+    </section>`;
+}
+
+function requiredRunsForPracticeLesson(lesson) {
+  const configured = Number(lesson?.pass_condition?.required_runs);
+  if (Number.isInteger(configured) && configured > 0) return configured;
+  return Number(lesson?.required_runs) || REQUIRED_RUNS_BY_STAGE[lesson?.stage] || 3;
+}
+
+function successfulRunsForPracticeLesson(lesson) {
+  const stored = Math.max(0, Number(lesson?.successful_runs) || 0);
+  const inferred = (lesson?.sessions || []).filter(session => session.runPassed === true || Number(session.starCount) > 0).length;
+  const successfulRuns = Math.max(stored, inferred);
+  return lesson?.completed ? Math.max(successfulRuns, requiredRunsForPracticeLesson(lesson)) : successfulRuns;
+}
+
+function practiceRunProgress(p) {
+  const lesson = p?.finished?.lesson || p?.lesson;
+  const requiredRuns = Number(p?.finished?.requiredRuns) || requiredRunsForPracticeLesson(lesson);
+  const successfulRuns = Number(p?.finished?.successfulRuns);
+  return {
+    requiredRuns,
+    successfulRuns: Number.isFinite(successfulRuns) ? successfulRuns : successfulRunsForPracticeLesson(lesson),
+  };
+}
+
+async function openPracticeSession(courseId, lessonId, options = {}) {
+  if (state.practice) {
+    clearPracticeCountdown(state.practice);
+    disconnectPracticeMidi();
+  }
+  const inputMode = options.inputMode === 'computer-keyboard' ? 'computer-keyboard' : 'midi';
+  state.settings = { ...state.settings, lastCourseId: courseId, lastLessonId: lessonId };
+  apiPost('/api/settings', { lastCourseId: courseId, lastLessonId: lessonId }).catch(() => {});
+  state.practice = {
+    courseId, lessonId, lesson: null, events: null, sheet: null,
+    midiStatus: 'idle', midiInputs: [], midiAccess: null, midiStateTimer: null, inputMode,
+    keyboardBaseNote: 60, keyboardPressedCodes: new Set(),
+    fingerStarts: {}, session: null, result: null, finished: null, finishing: false, loadError: '',
+    countdownTimer: null, countdownInterval: null, countdownSeconds: null,
+  };
+  state.view = 'practice-session';
+  render();
+  try {
+    const [{ course }, practiceData] = await Promise.all([
+      apiGet(`/api/courses/${encodeURIComponent(courseId)}`),
+      apiGet(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/practice-data`),
+    ]);
+    if (!state.practice || state.practice.lessonId !== lessonId) return; // navigated away while loading
+    state.practice.lesson = course.lessons.find(l => l.lesson_id === lessonId);
+    state.practice.events = practiceData.events;
+    state.practice.sheet = practiceData.sheet;
+    state.practice.sheet.eventIndexToLocal = new Map(practiceData.sheet.targetEventIndexes.map((index, localIndex) => [index, localIndex]));
+    state.practice.fingerStarts = inferFingerStarts(practiceData.events);
+    state.practice.session = PracticeScoring.createWaitModeSession(practiceData.events);
+    state.practice.result = state.practice.session.getResult();
+    render();
+    if (state.practice.inputMode === 'computer-keyboard') {
+      state.practice.keyboardBaseNote = suggestedKeyboardBaseNote(practiceData.events);
+      render();
+    } else {
+      connectMidiForPractice();
+    }
+  } catch (e) {
+    if (state.practice) state.practice.loadError = e.message;
+    render();
+  }
+}
+
+function clearPracticeCountdown(p = state.practice) {
+  if (!p) return;
+  clearTimeout(p.countdownTimer);
+  clearInterval(p.countdownInterval);
+  p.countdownTimer = null;
+  p.countdownInterval = null;
+  p.countdownSeconds = null;
+}
+
+function disconnectPracticeMidi() {
+  const p = state.practice;
+  if (!p) return;
+  clearTimeout(p.midiStateTimer);
+  p.midiStateTimer = null;
+  if (p.midiAccess) p.midiAccess.onstatechange = null;
+  for (const input of p.midiInputs || []) input.onmidimessage = null;
+  p.midiInputs = [];
+  p.midiAccess = null;
+}
+
+function exitPracticeSession() {
+  const courseId = state.practice?.courseId || state.activeCourseId;
+  clearPracticeCountdown();
+  disconnectPracticeMidi();
+  state.practice = null;
+  state.view = 'course-detail';
+  render();
+  if (courseId) openCourse(courseId);
+}
+
+async function connectMidiForPractice() {
+  const p = state.practice;
+  if (!p) return;
+  disconnectPracticeMidi();
+  p.inputMode = 'midi';
+  p.keyboardPressedCodes.clear();
+  if (!navigator.requestMIDIAccess) {
+    p.midiStatus = 'unsupported';
+    render();
+    return;
+  }
+  p.midiStatus = 'requesting';
+  render();
+  try {
+    const access = await navigator.requestMIDIAccess({ sysex: false });
+    const inputs = [...access.inputs.values()];
+    if (!state.practice || state.practice !== p) return;
+    p.midiAccess = access;
+    access.onstatechange = event => schedulePracticeMidiRefresh(p, access, event);
+    if (!inputs.length) {
+      p.midiStatus = 'no-devices';
+      render();
+      return;
+    }
+    bindPracticeMidiInputs(p, inputs);
+    render();
+  } catch (e) {
+    if (state.practice === p) { p.midiStatus = 'denied'; p.loadError = e.message; render(); }
+  }
+}
+
+function bindPracticeMidiInputs(p, inputs) {
+  const nextInputs = inputs.filter(input => input.state !== 'disconnected');
+  for (const input of p.midiInputs || []) {
+    if (!nextInputs.includes(input)) input.onmidimessage = null;
+  }
+  p.midiInputs = nextInputs;
+  for (const input of nextInputs) input.onmidimessage = handlePracticeMidiMessage;
+  p.midiStatus = nextInputs.length ? 'connected' : 'no-devices';
+}
+
+function schedulePracticeMidiRefresh(p, access, event) {
+  if (!state.practice || state.practice !== p || p.midiAccess !== access) return;
+  clearTimeout(p.midiStateTimer);
+  const explicitlyDisconnected = event?.port?.state === 'disconnected';
+  p.midiStateTimer = setTimeout(() => {
+    if (!state.practice || state.practice !== p || p.midiAccess !== access) return;
+    const inputs = [...access.inputs.values()];
+    if (inputs.length) {
+      bindPracticeMidiInputs(p, inputs);
+    } else if (explicitlyDisconnected) {
+      bindPracticeMidiInputs(p, []);
+    } else if (p.midiInputs.length) {
+      // Chrome may emit a connection-state update when a port first opens.
+      // Keep the proven input binding instead of treating that short gap as a disconnect.
+      p.midiStatus = 'connected';
+    } else {
+      p.midiStatus = 'no-devices';
+    }
+    render();
+  }, 350);
+}
+
+function applyPracticeInput(p, pitch, isNoteOn) {
+  if (!p || !p.session || p.finished || p.finishing) return;
+  if (isNoteOn) p.session.noteOn(pitch);
+  else p.session.noteOff(pitch);
+  p.result = p.session.getResult();
+  if (p.result.isComplete) finishPracticeSession();
+  else render();
+}
+
+function handlePracticeMidiMessage(e) {
+  const p = state.practice;
+  if (!p || p.inputMode !== 'midi') return;
+  const [status, data1, data2] = e.data;
+  const command = status & 0xf0;
+  if (command === 0x90 && data2 > 0) applyPracticeInput(p, data1, true);
+  else if (command === 0x80 || (command === 0x90 && data2 === 0)) applyPracticeInput(p, data1, false);
+  else return;
+}
+
+async function finishPracticeSession() {
+  const p = state.practice;
+  if (!p || p.finishing) return;
+  p.finishing = true;
+  const result = p.result;
+  try {
+    const { lesson, runPassed, completed, justCompleted, nextLesson, starCount, successfulRuns, requiredRuns } = await apiPost(
+      `/api/courses/${encodeURIComponent(p.courseId)}/lessons/${encodeURIComponent(p.lessonId)}/sessions`,
+      result,
+    );
+    p.lesson = lesson;
+    p.finished = { runPassed, completed, justCompleted, nextLesson, lesson, starCount, successfulRuns, requiredRuns };
+    startPracticeCountdown(p);
+  } catch (e) {
+    p.finished = { runPassed: false, completed: false, error: e.message };
+  }
+  render();
+}
+
+function retryPracticeSession() {
+  const p = state.practice;
+  if (!p || !p.events) return;
+  clearPracticeCountdown(p);
+  p.session = PracticeScoring.createWaitModeSession(p.events);
+  p.result = p.session.getResult();
+  p.finished = null;
+  p.finishing = false;
+  p.keyboardPressedCodes.clear();
+  render();
+}
+
+function startPracticeCountdown(p) {
+  clearPracticeCountdown(p);
+  const deadline = Date.now() + 3000;
+  p.countdownSeconds = 3;
+  p.countdownInterval = setInterval(() => {
+    if (state.practice !== p) return clearPracticeCountdown(p);
+    const nextSeconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    if (p.countdownSeconds !== nextSeconds) {
+      p.countdownSeconds = nextSeconds;
+      render();
+    }
+  }, 120);
+  p.countdownTimer = setTimeout(() => {
+    if (state.practice !== p) return;
+    clearPracticeCountdown(p);
+    if (p.finished?.runPassed && p.finished?.completed) {
+      if (p.finished.nextLesson) goToNextPracticeLesson();
+      else exitPracticeSession();
+    } else {
+      retryPracticeSession();
+    }
+  }, 3000);
+}
+
+function goToNextPracticeLesson() {
+  const p = state.practice;
+  const nextLesson = p?.finished?.nextLesson;
+  if (!p || !nextLesson) return;
+  clearPracticeCountdown(p);
+  openPracticeSession(p.courseId, nextLesson.lesson_id, { inputMode: p.inputMode });
+}
+
+const COMPUTER_KEYBOARD_LAYOUT = [
+  ['KeyA', 'A', 0], ['KeyW', 'W', 1], ['KeyS', 'S', 2], ['KeyE', 'E', 3],
+  ['KeyD', 'D', 4], ['KeyF', 'F', 5], ['KeyT', 'T', 6], ['KeyG', 'G', 7],
+  ['KeyY', 'Y', 8], ['KeyH', 'H', 9], ['KeyU', 'U', 10], ['KeyJ', 'J', 11],
+  ['KeyK', 'K', 12], ['KeyO', 'O', 13], ['KeyL', 'L', 14], ['KeyP', 'P', 15],
+  ['Semicolon', ';', 16], ['Quote', "'", 17],
+].map(([code, label, semitone]) => ({ code, label, semitone }));
+const COMPUTER_KEYBOARD_BY_CODE = new Map(COMPUTER_KEYBOARD_LAYOUT.map(key => [key.code, key]));
+
+function suggestedKeyboardBaseNote(events) {
+  const firstEvent = events?.find(event => event.notes?.length);
+  const lowest = firstEvent ? Math.min(...firstEvent.notes.map(note => note.note)) : 60;
+  return Math.max(24, Math.min(96, Math.floor(lowest / 12) * 12));
+}
+
+function releaseComputerKeyboardNotes(p) {
+  if (!p?.keyboardPressedCodes?.size) return;
+  for (const code of p.keyboardPressedCodes) {
+    const key = COMPUTER_KEYBOARD_BY_CODE.get(code);
+    if (key) p.session?.noteOff(p.keyboardBaseNote + key.semitone);
+  }
+  p.keyboardPressedCodes.clear();
+}
+
+function useComputerKeyboardForPractice() {
+  const p = state.practice;
+  if (!p?.events || p.finished) return;
+  releaseComputerKeyboardNotes(p);
+  p.inputMode = 'computer-keyboard';
+  p.keyboardBaseNote = suggestedKeyboardBaseNote(p.events);
+  p.loadError = '';
+  render();
+}
+
+function shiftComputerKeyboardOctave(direction) {
+  const p = state.practice;
+  if (!p || p.inputMode !== 'computer-keyboard') return;
+  releaseComputerKeyboardNotes(p);
+  p.keyboardBaseNote = Math.max(24, Math.min(96, p.keyboardBaseNote + direction * 12));
+  render();
+}
+
+function handleComputerKeyboardEvent(event) {
+  const p = state.practice;
+  if (!p || p.inputMode !== 'computer-keyboard' || !p.session || p.finished) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const activeTag = document.activeElement?.tagName;
+  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
+  const key = COMPUTER_KEYBOARD_BY_CODE.get(event.code);
+  if (!key) return;
+
+  event.preventDefault();
+  if (event.type === 'keydown') {
+    if (event.repeat || p.keyboardPressedCodes.has(event.code)) return;
+    p.keyboardPressedCodes.add(event.code);
+    applyPracticeInput(p, p.keyboardBaseNote + key.semitone, true);
+  } else {
+    if (!p.keyboardPressedCodes.has(event.code)) return;
+    p.keyboardPressedCodes.delete(event.code);
+    applyPracticeInput(p, p.keyboardBaseNote + key.semitone, false);
+  }
+}
+
+function renderComputerKeyboard(p, event) {
+  const targetPitches = new Set(event.notes.map(note => note.note));
+  const lowest = p.keyboardBaseNote;
+  const highest = lowest + 17;
+  const hasOutOfRangeTarget = [...targetPitches].some(pitch => pitch < lowest || pitch > highest);
+  const keys = COMPUTER_KEYBOARD_LAYOUT.map(key => {
+    const pitch = lowest + key.semitone;
+    const isSharp = pitch % 12 === 1 || pitch % 12 === 3 || pitch % 12 === 6 || pitch % 12 === 8 || pitch % 12 === 10;
+    return `<div class="pc-key${isSharp ? ' sharp' : ''}${targetPitches.has(pitch) ? ' target' : ''}"><span class="pc-key-code">${key.label}</span><span class="pc-key-note">${midiNoteName(pitch)}</span></div>`;
+  }).join('');
+  return `
+    <div class="pc-keyboard">
+      <div class="pc-keyboard-head"><strong>电脑键盘输入</strong><span>A = ${midiNoteName(lowest)}</span></div>
+      <div class="pc-key-grid">${keys}</div>
+      <div class="pc-keyboard-controls">
+        <button class="btn btn-secondary" onclick="shiftComputerKeyboardOctave(-1)">降八度</button>
+        <button class="btn btn-secondary" onclick="shiftComputerKeyboardOctave(1)">升八度</button>
+      </div>
+      ${hasOutOfRangeTarget ? '<div class="pc-keyboard-warning">当前目标不在这组键位里，请先切换八度。</div>' : ''}
+    </div>`;
+}
+
+const MIDI_STATUS_INFO = {
+  idle: { icon: '⏳', text: '准备连接电子钢琴…' },
+  requesting: { icon: '🔌', text: '请求 MIDI 权限中，请在浏览器弹窗里点击允许…' },
+  unsupported: { icon: '🚫', text: 'Web MIDI 目前只有 Chrome / Edge 桌面浏览器支持，换一个浏览器打开，或改用下面「在 Neothesia 中练习」（不计分）。' },
+  'no-devices': { icon: '🎹', text: '浏览器暂未枚举到 MIDI 输入。确认电子钢琴已开机并允许本网站使用 MIDI 后，点击重试连接。' },
+  denied: { icon: '❌', text: '没有获得 MIDI 权限，或连接失败。' },
+};
+
+function renderPracticeSession() {
+  const p = state.practice;
+  if (!p) return '';
+  if (p.loadError && !p.events) {
+    return `<div class="empty-hint">加载失败：${escapeHtml(p.loadError)}</div>`;
+  }
+  if (!p.events) {
+    return `<div class="empty-hint">加载中…</div>`;
+  }
+
+  if (p.finished) {
+    const r = p.result;
+    const starCount = Math.max(0, Math.min(3, Number(p.finished.starCount) || 0));
+    const bestStarCount = Math.max(0, Math.min(3, Number(p.finished.lesson?.best_star_count) || 0));
+    const nextLesson = p.finished.nextLesson;
+    const runProgress = practiceRunProgress(p);
+    const runLabel = `${runProgress.successfulRuns} / ${runProgress.requiredRuns} 次达标`;
+    const shouldAdvance = p.finished.runPassed && p.finished.completed;
+    const transitionLabel = shouldAdvance
+      ? (nextLesson ? '进入下一关' : '返回课程')
+      : '再来一次';
+    const resultMessage = p.finished.error
+      ? `保存成绩失败：${p.finished.error}`
+      : p.finished.runPassed
+        ? (p.finished.completed
+          ? (nextLesson ? '✓ 本关累计达标，下一关已解锁' : '✓ 本课程的全部关卡已完成')
+          : `✓ 本次达标，还需 ${Math.max(0, runProgress.requiredRuns - runProgress.successfulRuns)} 次`)
+        : '本次未达标，不计入累计次数';
+    const handsRows = Object.entries(r.hands || {}).map(([hand, h]) =>
+      `<div>${Math.round(h.accuracy * 100)}%<span>${HAND_LABEL[hand] || hand}准确率</span></div>`
+    ).join('');
+    return `
+      <div class="practice-wrap">
+        <div class="result-card">
+          <div class="result-score">${r.score} 分</div>
+          <div class="result-stars" aria-label="本次 ${starCount} 星">${'★'.repeat(starCount)}${'☆'.repeat(3 - starCount)}</div>
+          <div class="result-star-label">本次获得 ${starCount} 星</div>
+          <div class="result-pass ${p.finished.runPassed ? 'pass' : 'fail'}">${escapeHtml(resultMessage)}</div>
+          <div class="result-next">本关累计：${runLabel}</div>
+          ${nextLesson ? `<div class="result-next">下一关：${escapeHtml(nextLesson.title)}</div>` : ''}
+          ${p.finished.lesson ? `<div class="result-best">历史最佳 ${'★'.repeat(bestStarCount)}${'☆'.repeat(3 - bestStarCount)}</div>` : ''}
+          <div class="result-grid">
+            <div>${r.correctEvents} / ${r.totalEvents}<span>正确事件</span></div>
+            <div>${r.maxCombo}<span>最大连续正确</span></div>
+            <div>${r.extraNotes}<span>多弹/错音次数</span></div>
+            <div>${Math.round(r.durationMs/1000)} 秒<span>用时</span></div>
+            ${handsRows}
+          </div>
+          <div class="btn-row" style="justify-content:center;">
+            ${shouldAdvance && nextLesson ? '<button class="btn btn-primary" onclick="goToNextPracticeLesson()">立即进入下一关</button>' : ''}
+            ${shouldAdvance && !nextLesson ? '<button class="btn btn-primary" onclick="exitPracticeSession()">返回课程</button>' : ''}
+            ${!shouldAdvance ? '<button class="btn btn-primary" onclick="retryPracticeSession()">立即再来一次</button>' : ''}
+            <button class="btn btn-secondary" onclick="exitPracticeSession()">返回课程</button>
+          </div>
+          ${p.countdownSeconds != null ? `<div class="result-countdown">${p.countdownSeconds} 秒后自动${transitionLabel}</div>` : ''}
+        </div>
+        ${renderPracticeScorePanel(p)}
+      </div>
+    `;
+  }
+
+  if (p.inputMode !== 'computer-keyboard' && p.midiStatus !== 'connected') {
+    const info = MIDI_STATUS_INFO[p.midiStatus] || MIDI_STATUS_INFO.idle;
+    const retryable = p.midiStatus === 'no-devices' || p.midiStatus === 'denied';
+    return `
+      <div class="practice-wrap">
+        <div class="midi-status-card">
+          <div class="midi-status-icon">${info.icon}</div>
+          <div>${escapeHtml(info.text)}</div>
+          <div class="btn-row" style="justify-content:center;">
+            ${retryable ? '<button class="btn btn-primary" onclick="connectMidiForPractice()">重试连接</button>' : ''}
+            <button class="btn btn-primary" onclick="useComputerKeyboardForPractice()">使用电脑键盘评分</button>
+            <button class="btn btn-secondary" onclick="startPractice('${p.courseId}','${p.lessonId}'); exitPracticeSession();">改用 Neothesia（不计分）</button>
+          </div>
+        </div>
+        ${renderPracticeScorePanel(p)}
+      </div>
+    `;
+  }
+
+  const event = p.session.getCurrentEvent();
+  const r = p.result;
+  const dots = p.events.map((e, i) => {
+    let cls = 'practice-dot';
+    if (i < p.session.getEventIndex()) cls += r.mistakeEventIndexes.includes(i) ? ' done-mess' : ' done-clean';
+    else if (i === p.session.getEventIndex()) cls += ' current';
+    return `<span class="${cls}"></span>`;
+  }).join('');
+  const noteNames = event.notes.map(n => midiNoteName(n.note)).join(' · ');
+  const hands = [...new Set(event.notes.map(n => n.hand))];
+  const handLabel = hands.length > 1 ? '双手' : (HAND_LABEL[hands[0]] || '');
+  const runProgress = practiceRunProgress(p);
+
+  return `
+    <div class="practice-wrap">
+      <div class="practice-lesson-meta">
+        <div class="practice-progress">第 ${p.session.getEventIndex() + 1} / ${p.events.length} 个音符事件</div>
+        <div class="practice-stage">${dots}</div>
+        <div class="practice-run-progress">本关累计达标 <strong>${runProgress.successfulRuns} / ${runProgress.requiredRuns}</strong> 次</div>
+      </div>
+      ${renderPracticeScorePanel(p)}
+      <div class="practice-now-summary">
+        <span class="practice-now-label">当前要弹</span>
+        <strong>${escapeHtml(noteNames)}</strong>
+        <span class="lesson-badge badge-hand-${hands.length>1?'both':hands[0]}">${handLabel}</span>
+      </div>
+      ${renderPracticeFingerGuide(p, event)}
+      ${p.inputMode === 'computer-keyboard' ? renderComputerKeyboard(p, event) : `<div class="practice-input-note">已连接 MIDI：<strong>${escapeHtml(p.midiInputs.map(input => input.name || input.id || '未命名输入').join('、'))}</strong><br>直接开始弹奏。</div>`}
+      <div class="practice-stats">
+        <div class="practice-stat"><div class="practice-stat-val">${r.currentCombo}</div><div class="practice-stat-lbl">连击</div></div>
+        <div class="practice-stat"><div class="practice-stat-val">${r.correctEvents}</div><div class="practice-stat-lbl">正确</div></div>
+        <div class="practice-stat"><div class="practice-stat-val">${r.extraNotes}</div><div class="practice-stat-lbl">多弹/错音</div></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-secondary" onclick="exitPracticeSession()">退出练习</button></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════
 loadState();
 render();
+loadCourses();
+loadStaffScores();
+
+window.addEventListener('resize', () => {
+  clearTimeout(scoreResizeTimer);
+  scoreResizeTimer = setTimeout(() => {
+    if (state.view === 'detail') renderActiveScore();
+    else if (state.view === 'practice-session') renderPracticeScore(state.practice);
+  }, 120);
+});
+window.addEventListener('keydown', handleComputerKeyboardEvent);
+window.addEventListener('keyup', handleComputerKeyboardEvent);
 </script>
 </body>
 </html>

@@ -4,3 +4,10 @@
 /out
 .DS_Store
 node_modules
+
+# practice_app course system: generated per-user, not source
+/practice_app/courses/
+/practice_app/data/
+
+# Playwright MCP debug screenshots/snapshots, not project source
+/.playwright-mcp/

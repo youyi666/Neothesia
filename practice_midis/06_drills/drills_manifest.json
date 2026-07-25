@@ -1,0 +1,446 @@
+[
+  {
+    "id": "finger_seq",
+    "title": "顺指：五指顺序",
+    "category": "drill",
+    "drillGroup": "fingering",
+    "midi": "06_drills/fingering/finger_seq.mid",
+    "bpm": 70,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        4,
+        3,
+        2,
+        1,
+        1,
+        2,
+        3,
+        4,
+        5,
+        4,
+        3,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "finger_thumb_under",
+    "title": "穿指：拇指穿越（上行音阶）",
+    "category": "drill",
+    "drillGroup": "fingering",
+    "midi": "06_drills/fingering/finger_thumb_under.mid",
+    "bpm": 66,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        5,
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  {
+    "id": "finger_expand",
+    "title": "扩指：手掌张开",
+    "category": "drill",
+    "drillGroup": "fingering",
+    "midi": "06_drills/fingering/finger_expand.mid",
+    "bpm": 60,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        1,
+        3,
+        1,
+        4,
+        1,
+        5,
+        1,
+        4,
+        1,
+        3,
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "id": "finger_cross_over",
+    "title": "跨指：手指跨越（下行音阶）",
+    "category": "drill",
+    "drillGroup": "fingering",
+    "midi": "06_drills/fingering/finger_cross_over.mid",
+    "bpm": 66,
+    "fingering": {
+      "right": [
+        5,
+        4,
+        3,
+        2,
+        1,
+        3,
+        2,
+        1,
+        5,
+        4,
+        3,
+        2,
+        1,
+        3,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "finger_contract",
+    "title": "缩指：手掌收拢",
+    "category": "drill",
+    "drillGroup": "fingering",
+    "midi": "06_drills/fingering/finger_contract.mid",
+    "bpm": 60,
+    "fingering": {
+      "right": [
+        1,
+        5,
+        2,
+        3,
+        4,
+        5,
+        1,
+        5,
+        2,
+        3,
+        4,
+        5,
+        1,
+        5,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  },
+  {
+    "id": "tech_scale_c_major",
+    "title": "音阶：C 大调",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_scale_c_major.mid",
+    "bpm": 70,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        5,
+        4,
+        3,
+        2,
+        1,
+        3,
+        2,
+        1,
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        5,
+        4,
+        3,
+        2,
+        1,
+        3,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "tech_chromatic",
+    "title": "半音阶：C4-C5",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_chromatic.mid",
+    "bpm": 66,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "tech_arpeggio_short",
+    "title": "短琶音：C 大三和弦",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_arpeggio_short.mid",
+    "bpm": 70,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        3,
+        5,
+        3,
+        2,
+        1,
+        1,
+        2,
+        3,
+        5,
+        3,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "tech_double_notes",
+    "title": "双音：三度音程",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_double_notes.mid",
+    "bpm": 60,
+    "fingering": {
+      "right": [
+        1,
+        3,
+        2,
+        4,
+        1,
+        3,
+        2,
+        4,
+        1,
+        3,
+        2,
+        4,
+        1,
+        3,
+        2,
+        4,
+        1,
+        3
+      ]
+    }
+  },
+  {
+    "id": "tech_chords",
+    "title": "和弦：I-IV-V-I 原位三和弦",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_chords.mid",
+    "bpm": 60,
+    "fingering": {
+      "right": [
+        1,
+        3,
+        5,
+        1,
+        3,
+        5,
+        1,
+        3,
+        5,
+        1,
+        3,
+        5
+      ]
+    }
+  },
+  {
+    "id": "tech_arpeggio_long",
+    "title": "长琶音：跨两个八度",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_arpeggio_long.mid",
+    "bpm": 64,
+    "fingering": {
+      "right": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        5,
+        3,
+        2,
+        1,
+        3,
+        2,
+        1
+      ]
+    }
+  },
+  {
+    "id": "tech_finger_roll",
+    "title": "轮指：单音重复轮指",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_finger_roll.mid",
+    "bpm": 76,
+    "fingering": {
+      "right": [
+        3,
+        2,
+        1,
+        3,
+        2,
+        1,
+        3,
+        2
+      ]
+    }
+  },
+  {
+    "id": "tech_trill",
+    "title": "颤音：二度快速交替",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_trill.mid",
+    "bpm": 80,
+    "fingering": {
+      "right": [
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3
+      ]
+    }
+  },
+  {
+    "id": "tech_octaves",
+    "title": "八度：级进八度双音",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_octaves.mid",
+    "bpm": 60,
+    "fingering": {
+      "right": [
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5
+      ]
+    }
+  },
+  {
+    "id": "tech_broken_octaves",
+    "title": "分解八度：低高交替",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_broken_octaves.mid",
+    "bpm": 72,
+    "fingering": {
+      "right": [
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5
+      ]
+    }
+  },
+  {
+    "id": "tech_tremolo",
+    "title": "震音：五度快速交替",
+    "category": "drill",
+    "drillGroup": "technique",
+    "midi": "06_drills/technique/tech_tremolo.mid",
+    "bpm": 80,
+    "fingering": {
+      "right": [
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5,
+        1,
+        5
+      ]
+    }
+  }
+]

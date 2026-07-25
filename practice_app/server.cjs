@@ -1,10 +1,41 @@
 const http = require('http');
+const crypto = require('crypto');
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
+const { loadScoreLibrary, listMidiFiles } = require('./score-data.cjs');
+const { readMidi } = require('./lib/midi-file.js');
+const { analyzeSong } = require('./lib/analyze.js');
+const store = require('./lib/course-store.js');
+const { launchNeothesia } = require('./lib/neothesia-launcher.js');
 
-const PORT   = 3721;
+const PORT   = Number(process.env.PRACTICE_APP_PORT) || 3721;
 const PUBLIC = path.join(__dirname, 'public');
+const MIDI_ROOT = path.join(__dirname, '..', 'practice_midis');
+const IMPORTS_DIR = path.join(__dirname, 'data', 'imports');
+const APP_ID = 'neothesia-practice-app';
+const BACKEND_BUILD_FILES = [
+  __filename,
+  path.join(__dirname, 'score-data.cjs'),
+  ...fs.readdirSync(path.join(__dirname, 'lib'))
+    .filter(name => name.endsWith('.js'))
+    .sort()
+    .map(name => path.join(__dirname, 'lib', name)),
+];
+function getBackendBuildId(files) {
+  const hash = crypto.createHash('sha256');
+  for (const file of files) {
+    hash.update(path.relative(__dirname, file));
+    hash.update('\0');
+    hash.update(fs.readFileSync(file));
+  }
+  return hash.digest('hex');
+}
+const APP_BUILD_ID = getBackendBuildId(BACKEND_BUILD_FILES);
+const APP_STARTED_AT = new Date().toISOString();
+const scoreResult = loadScoreLibrary(MIDI_ROOT);
+const SCORE_JSON = Buffer.from(JSON.stringify(scoreResult.library), 'utf8');
+const seedResults = store.seedDefaultCourses(MIDI_ROOT);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -14,6 +45,7 @@ const MIME = {
   '.png':  'image/png',
   '.ico':  'image/x-icon',
 };
+const STATIC_CACHE_CONTROL = 'no-store, max-age=0, must-revalidate';
 
 function localIP() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
@@ -24,8 +56,228 @@ function localIP() {
   return 'localhost';
 }
 
+function sendJson(res, status, obj) {
+  const body = Buffer.from(JSON.stringify(obj), 'utf8');
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(body);
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+async function readJsonBody(req) {
+  const buf = await readRequestBody(req);
+  if (!buf.length) return {};
+  return JSON.parse(buf.toString('utf8'));
+}
+
+// Resolves a client-supplied MIDI reference to a safe absolute path.
+// Accepts either a path relative to practice_midis/, or an absolute path
+// that was itself returned by our own /api/midi/list or /api/midi/upload
+// (e.g. a previously uploaded file under practice_app/data/imports).
+function resolveMidiPath(input) {
+  if (!input) throw new Error('Missing MIDI path');
+  if (path.isAbsolute(input)) {
+    const resolved = path.resolve(input);
+    if (!fs.existsSync(resolved)) throw new Error(`File not found: ${resolved}`);
+    return resolved;
+  }
+  const resolved = path.resolve(MIDI_ROOT, input);
+  if (!resolved.startsWith(path.resolve(MIDI_ROOT))) throw new Error('Invalid path');
+  if (!fs.existsSync(resolved)) throw new Error(`File not found: ${resolved}`);
+  return resolved;
+}
+
+function analyzeMidiFile(absolutePath) {
+  const midi = readMidi(fs.readFileSync(absolutePath));
+  const title = path.basename(absolutePath, path.extname(absolutePath));
+  return analyzeSong(midi, { title });
+}
+
+async function handleApi(req, res, requestPath, url) {
+  // ── existing sheet-music endpoints ──
+  if (requestPath === '/api/scores' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(SCORE_JSON);
+    return true;
+  }
+  if (requestPath === '/api/health' && req.method === 'GET') {
+    sendJson(res, 200, {
+      ok: true,
+      appId: APP_ID,
+      buildId: APP_BUILD_ID,
+      startedAt: APP_STARTED_AT,
+      port: PORT,
+      scores: Object.keys(scoreResult.library).length,
+    });
+    return true;
+  }
+
+  // ── MIDI import / analysis ──
+  if (requestPath === '/api/midi/list' && req.method === 'GET') {
+    const files = listMidiFiles(MIDI_ROOT).map(f => path.relative(MIDI_ROOT, f).split(path.sep).join('/'));
+    sendJson(res, 200, { files });
+    return true;
+  }
+  if (requestPath === '/api/midi/analyze' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const absolutePath = resolveMidiPath(body.path);
+    const analysis = analyzeMidiFile(absolutePath);
+    sendJson(res, 200, { absolutePath, analysis });
+    return true;
+  }
+  if (requestPath === '/api/midi/upload' && req.method === 'POST') {
+    const name = url.searchParams.get('name') || `import_${Date.now()}.mid`;
+    const safeName = `${Date.now()}_${path.basename(name).replace(/[^a-zA-Z0-9._\-一-鿿]/g, '_')}`;
+    fs.mkdirSync(IMPORTS_DIR, { recursive: true });
+    const dest = path.join(IMPORTS_DIR, safeName);
+    const bytes = await readRequestBody(req);
+    if (bytes.toString('ascii', 0, 4) !== 'MThd') throw new Error('Uploaded file is not a valid MIDI file');
+    fs.writeFileSync(dest, bytes);
+    const analysis = analyzeMidiFile(dest);
+    sendJson(res, 200, { absolutePath: dest, analysis });
+    return true;
+  }
+
+  // ── courses ──
+  if (requestPath === '/api/courses' && req.method === 'GET') {
+    sendJson(res, 200, { courses: store.listCourses() });
+    return true;
+  }
+  if (requestPath === '/api/drills' && req.method === 'GET') {
+    sendJson(res, 200, { drills: store.loadDrillManifest(MIDI_ROOT) });
+    return true;
+  }
+  if (requestPath === '/api/courses' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const sourceMidiAbsPath = resolveMidiPath(body.sourceMidiPath);
+    const courseId = body.courseId || slugify(body.title) || `course_${Date.now()}`;
+    const course = store.createCourse({
+      courseId,
+      title: body.title,
+      sourceMidiAbsPath,
+      difficulty: body.difficulty || 1,
+      leftTrackIndex: body.leftTrackIndex,
+      rightTrackIndex: body.rightTrackIndex,
+    });
+    sendJson(res, 200, { course });
+    return true;
+  }
+
+  const courseMatch = requestPath.match(/^\/api\/courses\/([^/]+)$/);
+  if (courseMatch && req.method === 'GET') {
+    sendJson(res, 200, { course: store.loadCourse(decodeURIComponent(courseMatch[1])) });
+    return true;
+  }
+
+  const lessonsMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons$/);
+  if (lessonsMatch && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const lesson = store.addManualLesson(decodeURIComponent(lessonsMatch[1]), body);
+    sendJson(res, 200, { lesson });
+    return true;
+  }
+
+  const completeMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/complete$/);
+  if (completeMatch && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const lesson = store.setLessonCompleted(decodeURIComponent(completeMatch[1]), decodeURIComponent(completeMatch[2]), body.completed !== false);
+    sendJson(res, 200, { lesson });
+    return true;
+  }
+
+  const practiceMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/practice$/);
+  if (practiceMatch && req.method === 'POST') {
+    const exportedPath = store.exportLessonFile(decodeURIComponent(practiceMatch[1]), decodeURIComponent(practiceMatch[2]));
+    const { pid } = launchNeothesia(exportedPath);
+    sendJson(res, 200, { exportedPath, pid });
+    return true;
+  }
+
+  const eventsMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/events$/);
+  if (eventsMatch && req.method === 'GET') {
+    const events = store.getLessonEvents(decodeURIComponent(eventsMatch[1]), decodeURIComponent(eventsMatch[2]));
+    sendJson(res, 200, { events });
+    return true;
+  }
+
+  const practiceDataMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/practice-data$/);
+  if (practiceDataMatch && req.method === 'GET') {
+    const data = store.getLessonPracticeData(
+      decodeURIComponent(practiceDataMatch[1]),
+      decodeURIComponent(practiceDataMatch[2]),
+    );
+    sendJson(res, 200, data);
+    return true;
+  }
+
+  const sessionsMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/sessions$/);
+  if (sessionsMatch && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const result = store.recordPracticeResult(
+      decodeURIComponent(sessionsMatch[1]),
+      decodeURIComponent(sessionsMatch[2]),
+      body,
+    );
+    sendJson(res, 200, result);
+    return true;
+  }
+
+  // ── settings ──
+  if (requestPath === '/api/settings' && req.method === 'GET') {
+    sendJson(res, 200, store.readSettings());
+    return true;
+  }
+  if (requestPath === '/api/settings' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    sendJson(res, 200, store.updateSettings(body));
+    return true;
+  }
+
+  return false;
+}
+
+function slugify(title) {
+  if (!title) return '';
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_一-鿿]/g, '')
+    .slice(0, 40);
+}
+
 const server = http.createServer((req, res) => {
-  const safePath = req.url.split('?')[0].replace(/\.\./g, '');
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const requestPath = url.pathname;
+
+  if (requestPath.startsWith('/api/')) {
+    handleApi(req, res, requestPath, url)
+      .then(handled => {
+        if (!handled) sendJson(res, 404, { error: 'Not found' });
+      })
+      .catch(err => {
+        sendJson(res, 400, { error: err.message });
+      });
+    return;
+  }
+
+  if (requestPath === '/lib/scoring.js') {
+    fs.readFile(path.join(__dirname, 'lib', 'scoring.js'), (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
+      res.end(data);
+    });
+    return;
+  }
+
+  const safePath = requestPath.replace(/\.\./g, '');
   const filePath = path.join(PUBLIC, safePath === '/' ? 'index.html' : safePath);
   const ext = path.extname(filePath);
 
@@ -33,11 +285,17 @@ const server = http.createServer((req, res) => {
     if (err) {
       fs.readFile(path.join(PUBLIC, 'index.html'), (e2, d2) => {
         if (e2) { res.writeHead(404); res.end('Not found'); return; }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': STATIC_CACHE_CONTROL,
+        });
         res.end(d2);
       });
     } else {
-      res.writeHead(200, { 'Content-Type': MIME[ext] || 'text/plain' });
+      res.writeHead(200, {
+        'Content-Type': MIME[ext] || 'text/plain',
+        'Cache-Control': STATIC_CACHE_CONTROL,
+      });
       res.end(data);
     }
   });
@@ -46,7 +304,17 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   const ip = localIP();
   console.log('\n🎹  练琴 App 已启动\n');
+  console.log(`  五线谱: 已读取 ${Object.keys(scoreResult.library).length} 个 MIDI 文件`);
+  for (const error of scoreResult.errors) console.warn(`  MIDI 读取失败: ${error}`);
+  const created = seedResults.filter(r => r.status === 'created').length;
+  const existing = seedResults.filter(r => r.status === 'exists').length;
+  console.log(`  课程: ${created} 个新生成，${existing} 个已存在`);
+  for (const r of seedResults) {
+    if (r.status === 'error') console.warn(`  课程生成失败 ${r.id}: ${r.error}`);
+    if (r.status === 'missing_source') console.warn(`  课程源文件缺失 ${r.id}: ${r.path}`);
+  }
+  console.log(`  课程系统: http://localhost:${PORT}/#courses`);
   console.log(`  本机: http://localhost:${PORT}`);
   console.log(`  手机: http://${ip}:${PORT}  (需与电脑在同一 WiFi)\n`);
-  console.log('  关闭此窗口即停止服务\n');
+  console.log('  停止后台服务: 双击 停止练琴App.bat\n');
 });
