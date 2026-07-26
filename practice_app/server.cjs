@@ -147,7 +147,8 @@ async function handleApi(req, res, requestPath, url) {
 
   // ── courses ──
   if (requestPath === '/api/courses' && req.method === 'GET') {
-    sendJson(res, 200, { courses: store.listCourses() });
+    const user = url.searchParams.get('user') || null;
+    sendJson(res, 200, { courses: store.listCourses(user) });
     return true;
   }
   if (requestPath === '/api/drills' && req.method === 'GET') {
@@ -172,7 +173,8 @@ async function handleApi(req, res, requestPath, url) {
 
   const courseMatch = requestPath.match(/^\/api\/courses\/([^/]+)$/);
   if (courseMatch && req.method === 'GET') {
-    sendJson(res, 200, { course: store.loadCourse(decodeURIComponent(courseMatch[1])) });
+    const user = url.searchParams.get('user') || null;
+    sendJson(res, 200, { course: store.loadCourse(decodeURIComponent(courseMatch[1]), user) });
     return true;
   }
 
@@ -187,7 +189,7 @@ async function handleApi(req, res, requestPath, url) {
   const completeMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/complete$/);
   if (completeMatch && req.method === 'POST') {
     const body = await readJsonBody(req);
-    const lesson = store.setLessonCompleted(decodeURIComponent(completeMatch[1]), decodeURIComponent(completeMatch[2]), body.completed !== false);
+    const lesson = store.setLessonCompleted(decodeURIComponent(completeMatch[1]), decodeURIComponent(completeMatch[2]), body.completed !== false, body.user || null);
     sendJson(res, 200, { lesson });
     return true;
   }
@@ -224,8 +226,34 @@ async function handleApi(req, res, requestPath, url) {
       decodeURIComponent(sessionsMatch[1]),
       decodeURIComponent(sessionsMatch[2]),
       body,
+      body.user || null,
     );
     sendJson(res, 200, result);
+    return true;
+  }
+
+  // ── practice time ──
+  if (requestPath === '/api/practice-time' && req.method === 'GET') {
+    const user = url.searchParams.get('user');
+    const data = readPracticeTime();
+    if (user) {
+      sendJson(res, 200, { user, totalSeconds: data[user] || 0 });
+    } else {
+      sendJson(res, 200, { users: data });
+    }
+    return true;
+  }
+  if (requestPath === '/api/practice-time' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const { user, seconds } = body;
+    if (!user || typeof seconds !== 'number' || seconds <= 0) {
+      sendJson(res, 200, { ok: true });
+      return true;
+    }
+    const data = readPracticeTime();
+    data[user] = (data[user] || 0) + Math.floor(seconds);
+    writePracticeTime(data);
+    sendJson(res, 200, { user, totalSeconds: data[user] });
     return true;
   }
 
@@ -241,6 +269,18 @@ async function handleApi(req, res, requestPath, url) {
   }
 
   return false;
+}
+
+const PRACTICE_TIME_FILE = path.join(__dirname, 'data', 'practice_time.json');
+function readPracticeTime() {
+  try {
+    if (fs.existsSync(PRACTICE_TIME_FILE)) return JSON.parse(fs.readFileSync(PRACTICE_TIME_FILE, 'utf8'));
+  } catch {}
+  return {};
+}
+function writePracticeTime(data) {
+  fs.mkdirSync(path.dirname(PRACTICE_TIME_FILE), { recursive: true });
+  fs.writeFileSync(PRACTICE_TIME_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
 function slugify(title) {

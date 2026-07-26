@@ -301,6 +301,30 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .course-resume-actions { display:flex; gap:8px; }
 .course-resume-actions .btn { flex:1; }
 .course-list-heading { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:1px; margin:4px 0 9px; }
+.ptime-widget { background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:16px; display:flex; flex-direction:column; gap:10px; cursor:default; }
+.ptime-bar-row { display:grid; grid-template-columns:5em 1fr auto; align-items:center; gap:10px; cursor:pointer; border-radius:6px; padding:3px 2px; transition:background 0.15s; }
+.ptime-bar-row:hover { background:var(--border); }
+.ptime-bar-label { font-size:13px; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ptime-bar-label--active { color:var(--text); font-weight:700; }
+.ptime-bar-track { height:10px; background:var(--border); border-radius:5px; overflow:hidden; min-width:60px; }
+.ptime-bar-fill { height:100%; border-radius:5px; transition:width 0.4s ease; }
+.ptime-bar-fill--0 { background:#2a78d6; }
+.ptime-bar-fill--1 { background:#eb6834; }
+.ptime-bar-value { font-size:12px; font-weight:700; white-space:nowrap; min-width:5em; text-align:right; }
+.ptime-bar-value--0 { color:#2a78d6; }
+.ptime-bar-value--1 { color:#eb6834; }
+@media (prefers-color-scheme:dark) {
+  .ptime-bar-fill--0 { background:#3987e5; } .ptime-bar-value--0 { color:#3987e5; }
+  .ptime-bar-fill--1 { background:#d95926; } .ptime-bar-value--1 { color:#d95926; }
+}
+:root[data-theme="dark"] .ptime-bar-fill--0 { background:#3987e5; } :root[data-theme="dark"] .ptime-bar-value--0 { color:#3987e5; }
+:root[data-theme="dark"] .ptime-bar-fill--1 { background:#d95926; } :root[data-theme="dark"] .ptime-bar-value--1 { color:#d95926; }
+:root[data-theme="light"] .ptime-bar-fill--0 { background:#2a78d6; } :root[data-theme="light"] .ptime-bar-value--0 { color:#2a78d6; }
+:root[data-theme="light"] .ptime-bar-fill--1 { background:#eb6834; } :root[data-theme="light"] .ptime-bar-value--1 { color:#eb6834; }
+.ptime-live-dot { color:#e05a2b; font-size:9px; margin-left:4px; animation:blink 1s step-start infinite; }
+@keyframes blink { 50% { opacity:0; } }
+.practice-timer-live { font-size:11px; color:var(--primary); font-weight:600; text-align:center; }
+.practice-overtime-banner { width:min(100%,900px); padding:10px 14px; margin-bottom:10px; border-radius:8px; background:#fff8e6; border:1.5px solid #f5c842; color:#7a5800; font-size:13px; font-weight:600; text-align:center; }
 
 .field { margin-bottom:14px; }
 .field-label { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px; display:block; }
@@ -385,8 +409,10 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .practice-stat { text-align:center; }
 .practice-stat-val { font-size:20px; font-weight:700; }
 .practice-stat-lbl { font-size:11px; color:var(--muted); }
-.midi-status-card { background:var(--card); border-radius:12px; padding:18px; text-align:center; max-width:320px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
-.midi-status-icon { font-size:32px; margin-bottom:8px; }
+.midi-status-card { width:min(100%,520px); margin:8px 0 18px; background:var(--card); border:1px solid #e0d9ee; border-top:3px solid var(--primary); border-radius:8px; padding:20px 22px; text-align:center; box-shadow:var(--shadow-sm); }
+.midi-status-icon { font-size:26px; line-height:1; margin-bottom:9px; }
+.midi-status-card > div:nth-child(2) { color:var(--text); font-size:13px; line-height:1.6; }
+.midi-status-card .btn-row { margin-top:15px; }
 .practice-input-note { font-size:12px; color:var(--muted); margin:-8px 0 14px; text-align:center; }
 .practice-input-note strong { color:var(--text); }
 .pc-keyboard { width:min(100%,360px); margin:0 0 20px; }
@@ -414,6 +440,155 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .result-countdown { color:var(--primary); font-size:13px; font-weight:700; margin:-6px 0 15px; }
 .result-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px; text-align:left; margin-bottom:16px; }
 .result-grid div span { display:block; color:var(--muted); font-size:10px; }
+
+/* ── UI refinement: course workbench and training library ── */
+:root {
+  --bg: #f6f5fa;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --primary: #6243bd;
+  --primary-light: #f0edfb;
+  --text: #24212d;
+  --muted: #746f7e;
+  --border: #e5e1ec;
+  --shadow-sm: 0 1px 2px rgba(26, 20, 40, .05), 0 5px 18px rgba(26, 20, 40, .045);
+}
+body { background:var(--bg); }
+.hdr { height:64px; padding:0; color:var(--text); background:rgba(255,255,255,.96); border-bottom:1px solid var(--border); box-shadow:none; }
+.hdr-shell { width:min(1180px,100%); height:100%; margin:0 auto; padding:0 24px; display:flex; align-items:center; min-width:0; }
+.hdr-title { font-size:16px; font-weight:780; letter-spacing:0; }
+.hdr-title::before { content:'Piano Flow'; color:var(--primary); font-size:12px; font-weight:800; letter-spacing:.4px; margin-right:10px; }
+.hdr-back { width:32px; height:32px; margin-right:12px; border:1px solid var(--border); border-radius:8px; display:inline-flex; align-items:center; justify-content:center; font-size:24px; line-height:1; color:var(--text); background:#fff; }
+.content { padding:24px 28px 18px; background:var(--bg); }
+.content-inner { width:min(1180px,100%); margin:0 auto; }
+.tab-bar { height:68px; padding:0 max(18px,calc((100vw - 1180px) / 2)); gap:8px; background:rgba(255,255,255,.96); border-top:1px solid var(--border); }
+.tab { flex:0 0 auto; min-width:92px; padding:8px 14px; flex-direction:row; gap:7px; font-size:12px; font-weight:700; color:#756f7d; border-radius:0; }
+.tab.active { color:var(--primary); }
+.tab.active::after { content:''; position:absolute; width:28px; height:3px; bottom:0; border-radius:3px 3px 0 0; background:var(--primary); }
+.tab { position:relative; }
+.tab .icon { font-size:18px; line-height:1; }
+
+.course-home, .drill-home { display:flex; flex-direction:column; gap:24px; padding-bottom:20px; }
+.course-home-top { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,.72fr); gap:18px; align-items:stretch; }
+.course-resume { min-height:172px; margin:0; padding:22px 24px; border:1px solid #d9d0f3; border-left:4px solid var(--primary); border-radius:8px; box-shadow:var(--shadow-sm); display:flex; flex-direction:column; align-items:flex-start; justify-content:center; }
+.course-resume-kicker, .course-list-heading, .course-section-eyebrow { color:var(--primary); font-size:11px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; }
+.course-resume-title { font-size:23px; line-height:1.22; margin:7px 0 4px; letter-spacing:0; }
+.course-resume-meta { margin:0 0 16px; font-size:13px; }
+.course-resume-actions { width:min(100%,440px); }
+.btn { min-height:38px; padding:9px 14px; border-radius:7px; font-weight:750; transition:transform .15s ease, box-shadow .15s ease, background .15s ease; }
+.btn-primary { background:var(--primary); box-shadow:0 3px 9px rgba(98,67,189,.19); }
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 5px 14px rgba(98,67,189,.25); }
+.btn-secondary { background:#f1eff7; color:#4f4762; }
+.ptime-widget { min-height:172px; margin:0; padding:19px 20px; border:1px solid var(--border); border-radius:8px; background:var(--surface); box-shadow:var(--shadow-sm); justify-content:center; }
+.ptime-widget::before { content:'今日练习时间'; color:var(--text); font-size:13px; font-weight:800; margin-bottom:2px; }
+.ptime-bar-row { grid-template-columns:4.6em 1fr auto; padding:5px 2px; }
+.ptime-bar-track { height:7px; background:#eeebf3; }
+.ptime-bar-fill--0 { background:#4d83cf; }
+.ptime-bar-fill--1 { background:#d87547; }
+.ptime-bar-value { min-width:4.8em; font-size:11px; }
+
+.course-section { display:flex; flex-direction:column; gap:12px; }
+.course-section-head { display:flex; align-items:end; justify-content:space-between; gap:12px; }
+.course-section-title { color:var(--text); font-size:20px; line-height:1.15; font-weight:800; }
+.course-section-meta { color:var(--muted); font-size:12px; text-align:right; }
+.course-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.course-card { min-height:142px; margin:0; padding:16px 17px; border:1px solid var(--border); border-radius:8px; box-shadow:none; display:flex; flex-direction:column; gap:9px; overflow:hidden; background:var(--card); transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.course-card:hover { border-color:#c6b8ec; box-shadow:var(--shadow-sm); transform:translateY(-1px); }
+.course-card-top { display:flex; align-items:flex-start; gap:11px; min-width:0; }
+.course-card-mark { width:34px; height:34px; flex:0 0 34px; border-radius:7px; display:grid; place-items:center; background:#edf3ff; color:#3b6eb5; font-size:12px; font-weight:850; }
+.course-card--drill-fingering .course-card-mark { background:#fff0e9; color:#bd6036; }
+.course-card--drill-technique .course-card-mark { background:#e9f6ef; color:#26785a; }
+.course-card-main { min-width:0; flex:1; }
+.course-card-title { margin:0; font-size:15px; font-weight:780; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.course-card-sub { margin:3px 0 0; color:var(--muted); font-size:11px; }
+.course-card-status { color:var(--primary); font-size:11px; font-weight:800; white-space:nowrap; }
+.course-card-foot { margin-top:auto; display:flex; align-items:center; gap:10px; }
+.course-progress-track { flex:1; height:6px; background:#efedf3; border-radius:999px; }
+.course-progress-fill { background:var(--primary); border-radius:999px; }
+.course-card-progress { color:var(--muted); font-size:11px; white-space:nowrap; }
+.course-card-arrow { color:#958ba9; font-size:20px; line-height:1; }
+.training-portal { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:16px; padding:18px 20px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); cursor:pointer; }
+.training-portal-mark { width:40px; height:40px; border-radius:7px; display:grid; place-items:center; background:#f3f0fc; color:var(--primary); font-size:19px; }
+.training-portal-title { color:var(--text); font-size:16px; font-weight:800; }
+.training-portal-copy { color:var(--muted); font-size:12px; margin-top:3px; }
+.training-portal-action { color:var(--primary); font-size:12px; font-weight:800; white-space:nowrap; }
+.add-course-btn { min-height:72px; margin:0; border:1px dashed #c9c1d8; border-radius:8px; background:transparent; color:#5e5373; font-size:13px; }
+
+.drill-intro { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:end; padding:4px 0 2px; }
+.drill-intro h2 { margin:4px 0 7px; color:var(--text); font-size:26px; line-height:1.18; letter-spacing:0; }
+.drill-intro p { max-width:650px; color:var(--muted); font-size:13px; line-height:1.7; }
+.drill-stat-list { display:flex; gap:10px; }
+.drill-stat { min-width:88px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; }
+.drill-stat strong { display:block; color:var(--text); font-size:19px; line-height:1; }
+.drill-stat span { color:var(--muted); font-size:11px; }
+.drill-filter { display:flex; gap:4px; padding:4px; width:max-content; border:1px solid var(--border); border-radius:8px; background:#fff; }
+.drill-filter button { min-height:32px; padding:0 12px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:inherit; font-size:12px; font-weight:750; cursor:pointer; }
+.drill-filter button.active { color:#fff; background:var(--primary); }
+.drill-section-note { color:var(--muted); font-size:12px; }
+
+.practice-wrap { padding:4px 0 34px; }
+.practice-lesson-meta, .practice-sheet, .practice-now-summary, .practice-finger-guide { width:min(100%,980px); }
+.practice-lesson-meta { min-height:42px; padding:0 2px; }
+.practice-sheet { margin:0 0 14px; border-radius:8px; border-color:#ddd8e7; box-shadow:var(--shadow-sm); }
+.practice-sheet-head { min-height:46px; padding:10px 14px; background:#fff; }
+.practice-sheet-head strong { font-size:14px; }
+.practice-sheet-head span { max-width:54%; line-height:1.45; }
+.practice-now-summary { min-height:50px; padding:11px 13px; background:#fbfaff; border-color:#ddd6ee; }
+.practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); }
+.practice-finger-card { min-height:76px; box-shadow:none; }
+.pc-keyboard { width:min(100%,620px); padding:14px; border:1px solid var(--border); border-radius:8px; background:#fff; box-shadow:var(--shadow-sm); }
+.pc-key { min-height:54px; border-radius:5px; }
+.practice-stats { margin:2px 0 16px; }
+
+@media (max-width:720px) {
+  .hdr { height:52px; }
+  .hdr-shell { padding:0 14px; }
+  .hdr-title { font-size:15px; }
+  .hdr-title::before { display:none; }
+  .hdr-back { width:28px; height:28px; margin-right:9px; }
+  .content { padding:14px 12px 12px; }
+  .tab-bar { height:62px; padding:0 3px; gap:0; justify-content:space-around; }
+  .tab { min-width:0; flex:1; padding:6px 3px; flex-direction:column; gap:2px; font-size:10px; }
+  .tab .icon { font-size:17px; }
+  .course-home, .drill-home { gap:18px; }
+  .course-home-top { grid-template-columns:1fr; gap:12px; }
+  .course-resume, .ptime-widget { min-height:0; padding:17px; }
+  .course-resume-title { font-size:19px; }
+  .course-section-head { align-items:start; }
+  .course-section-title { font-size:18px; }
+  .course-section-meta { max-width:45%; font-size:11px; }
+  .course-grid { grid-template-columns:1fr; gap:9px; }
+  .course-card { min-height:118px; padding:14px; }
+  .training-portal { grid-template-columns:auto minmax(0,1fr); gap:11px; padding:15px 4px; }
+  .training-portal-action { grid-column:2; }
+  .drill-intro { grid-template-columns:1fr; gap:14px; }
+  .drill-intro h2 { font-size:22px; }
+  .drill-stat-list { gap:7px; }
+  .drill-stat { min-width:0; flex:1; padding:9px 10px; }
+  .drill-filter { width:100%; }
+  .drill-filter button { flex:1; padding:0 7px; }
+  .practice-lesson-meta { display:grid; grid-template-columns:1fr auto; gap:7px 10px; padding:0; }
+  .practice-lesson-meta .practice-stage { grid-column:1 / -1; justify-content:flex-start; order:3; }
+  .practice-lesson-meta .practice-run-progress { text-align:right; }
+  .practice-sheet-head { align-items:flex-start; flex-direction:column; gap:3px; }
+  .practice-sheet-head span { max-width:100%; text-align:left; }
+  .practice-now-summary strong { font-size:16px; }
+  .practice-now-summary .lesson-badge { margin-left:0; }
+  .practice-finger-list { grid-template-columns:1fr; }
+  .pc-keyboard { padding:10px; }
+  .pc-key { min-height:47px; }
+}
+
+@media (orientation:landscape) and (max-height:700px) {
+  .tab-bar { display:flex; height:48px; }
+  .tab { flex-direction:row; min-width:82px; font-size:11px; }
+  .content { padding:10px 18px; }
+  .course-home-top { grid-template-columns:minmax(0,1.35fr) minmax(260px,.75fr); }
+  .course-resume, .ptime-widget { min-height:136px; padding:15px 18px; }
+  .course-resume-title { font-size:18px; }
+  .course-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .course-card { min-height:108px; padding:12px; }
+}
 </style>
 </head>
 <body>
@@ -651,6 +826,9 @@ const WEEK_TASKS = [
 //  STATE
 // ═══════════════════════════════════════
 
+const PRACTICE_USERS = ['罗俊生', '李俊'];
+const IDLE_TIMEOUT_MS = 10_000;
+
 const state = {
   view: 'courses',    // 'songs' | 'detail' | 'tasks' | 'courses' | 'import' | 'course-detail'
   activeSong: null,
@@ -662,13 +840,87 @@ const state = {
   courses: [],
   coursesLoaded: false,
   drillFingering: {}, // 专项特训指法表：courseId -> {right:[...]}，来自 /api/drills
+  drillFilter: 'all',
   settings: {},
   activeCourseId: null,
   activeCourse: null,
   import: null, // wizard state, see startImport()
   practice: null, // real-time scoring session state, see openPracticeSession()
   toast: '',
+
+  currentUser: '罗俊生',
+  practiceTimeStats: {},          // { '罗俊生': 0, '李俊': 0 }
+  practiceTimer: { active: false, startTime: null, lastActivity: null },
+  practiceTimeWarning: false,     // 连续练习超过 20 分钟时置 true
 };
+
+// ── Practice time helpers ─────────────────────────────────────────────────
+
+function formatPracticeTime(totalSeconds) {
+  const s = Math.floor(totalSeconds || 0);
+  if (s < 60) return s > 0 ? `${s}秒` : '0秒';
+  const YEAR = 365 * 24 * 3600, MONTH = 30 * 24 * 3600, DAY = 24 * 3600, HOUR = 3600, MIN = 60;
+  let rem = s;
+  const years  = Math.floor(rem / YEAR);  rem %= YEAR;
+  const months = Math.floor(rem / MONTH); rem %= MONTH;
+  const days   = Math.floor(rem / DAY);   rem %= DAY;
+  const hours  = Math.floor(rem / HOUR);  rem %= HOUR;
+  const mins   = Math.floor(rem / MIN);
+  return [years && `${years}年`, months && `${months}月`, days && `${days}日`,
+          hours && `${hours}小时`, mins && `${mins}分钟`].filter(Boolean).join('') || '不足1分钟';
+}
+
+function onPracticeActivity() {
+  const timer = state.practiceTimer;
+  const now = Date.now();
+  if (!timer.active) { timer.active = true; timer.startTime = now; }
+  timer.lastActivity = now;
+}
+
+async function endPracticeTimerSession(seconds) {
+  const timer = state.practiceTimer;
+  timer.active = false; timer.startTime = null; timer.lastActivity = null;
+  state.practiceTimeWarning = false;
+  if (!(seconds > 0)) return;
+  const user = state.currentUser;
+  state.practiceTimeStats[user] = (state.practiceTimeStats[user] || 0) + seconds;
+  render();
+  try { await apiPost('/api/practice-time', { user, seconds }); } catch (e) { /* best-effort */ }
+}
+
+setInterval(async () => {
+  const timer = state.practiceTimer;
+  if (!timer.active || !timer.lastActivity) return;
+  const now = Date.now();
+  if (now - timer.lastActivity >= IDLE_TIMEOUT_MS) {
+    const toCredit = Math.max(0, Math.floor((timer.lastActivity - timer.startTime) / 1000));
+    await endPracticeTimerSession(toCredit);
+  } else {
+    // 检查是否超过 20 分钟，首次触发时强制刷新以显示提醒
+    const elapsed = Math.floor((now - timer.startTime) / 1000);
+    if (elapsed >= 1200 && !state.practiceTimeWarning) {
+      state.practiceTimeWarning = true;
+      render();
+    } else if (state.view === 'practice-session') {
+      render();
+    }
+  }
+}, 1000);
+
+// 课程归属：title 含 '青花瓷' 的课程归李俊，其余归罗俊生
+function getCourseOwner(course) {
+  const text = (course.title || '') + (course.course_id || '');
+  if (text.includes('青花瓷')) return '李俊';
+  return '罗俊生';
+}
+
+function switchPracticeUser(user) {
+  state.currentUser = user;
+  state.practiceTimeWarning = false;
+  state.coursesLoaded = false;
+  render();
+  loadCourses();
+}
 
 const scoreState = {
   library: {},
@@ -871,15 +1123,17 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
   }
 
   if (showNames) {
+    // 和弦时多个音符的灰色音名标签按 stackIndex 向下错开，避免同列重叠
     svg.appendChild(svgEl('text', {
-      x, y:staffTop + 83, 'text-anchor':'middle', 'font-size':9.5,
+      x, y:staffTop + 83 + stackIndex * 14, 'text-anchor':'middle', 'font-size':9.5,
       'font-family':'Arial, sans-serif', 'font-weight':'600', fill:'#7b7188',
     }, midiName(note.midi)));
   }
 
-  if (annotation?.letter && stackIndex === 0) {
+  if (annotation?.letter) {
+    // 和弦时彩色音名标签同样按 stackIndex 向下错开
     svg.appendChild(svgEl('text', {
-      x, y:staffTop + 76, 'text-anchor':'middle', 'font-size':11,
+      x, y:staffTop + 76 + stackIndex * 14, 'text-anchor':'middle', 'font-size':11,
       'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
     }, annotation.letter));
   }
@@ -890,16 +1144,22 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
     const fy = clef === 'treble'
       ? (stemUp ? y - 38 : y - 16)
       : (stemUp ? y + 44 : y + 22);
-    // 同一时刻多个音符（和弦/双音）按 stackIndex 依次向上错开，避免指法框重叠。
-    const boxY = Math.min(fy, staffTop - 8) - stackIndex * 20;
+    // 按 stackIndex 向上错开；Math.max(16,...) 保证框体不飞出 SVG 顶部：
+    // 最小 boxY=16 → rect 顶边=4，即使长序列累积多级也不会超出画布。
+    const boxY = Math.max(16, Math.min(fy, staffTop - 8) - stackIndex * 16);
     svg.appendChild(svgEl('rect', {
-      x:x-10, y:boxY-14, width:20, height:18, rx:2,
-      fill:'#fff', stroke:ink, 'stroke-width':1.4,
+      x:x-8, y:boxY-12, width:16, height:14, rx:2,
+      fill:'#fff', stroke:ink, 'stroke-width':1.2,
     }));
     svg.appendChild(svgEl('text', {
-      x, y:boxY-1, 'text-anchor':'middle', 'font-size':11,
+      x, y:boxY-2, 'text-anchor':'middle', 'font-size':9,
       'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
     }, String(displayedFinger)));
+  }
+
+  // 当前要弹奏的音符：插入不可见锚点，供自动滚动定位用
+  if (tone === 'current') {
+    svg.appendChild(svgEl('circle', { id:'practice-current', cx:x, cy:y, r:0, fill:'none' }));
   }
 }
 
@@ -1004,17 +1264,19 @@ function drawStaff(svg, options) {
     ? track.notes.filter(n => n.start < systemStart - 0.001).length
     : 0;
   let noteIdx = notesBefore;
-  let lastChordStart = null;
+  let lastBoxX = null;
   let stackIndex = 0;
   for (const note of track.notes) {
     if (note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001) {
       const fingerNum = fingering ? fingering[noteIdx] : null;
       const tone = noteToneFor ? noteToneFor(note) : 'default';
       const annotation = noteAnnotationFor ? noteAnnotationFor(note, track) : null;
-      // 和弦/双音等同一时刻多个音符：按音高从低到高依次错开，避免指法框/音名标签互相覆盖。
-      stackIndex = note.start === lastChordStart ? stackIndex + 1 : 0;
-      lastChordStart = note.start;
-      drawNote(svg, note, xForBeat(note.start), clef, staffTop, showNames && stackIndex === 0, fingerNum, tone, annotation, stackIndex);
+      const x = xForBeat(note.start);
+      // 相邻音符间距 < 18px（和弦或密集音型）时用 stackIndex 错位显示，防止框框重叠。
+      // 使用模 4 循环：0→1→2→3→0→1…，密集音型最多占 4 个固定高度层，不会无限堆积溢出。
+      stackIndex = (lastBoxX != null && Math.abs(x - lastBoxX) < 18) ? (stackIndex + 1) % 4 : 0;
+      lastBoxX = x;
+      drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone, annotation, stackIndex);
       noteIdx++;
     }
   }
@@ -1212,13 +1474,16 @@ function practiceScoreAnnotation(note, track, p) {
   const eventNote = p.events?.[localIndex]?.notes?.find(candidate => candidate.hand === hand && candidate.note === note.midi);
   if (!eventNote) return { letter };
 
+  // Viterbi 引擎（fingering-engine.js）在服务端预算并注入了 finger 字段，优先使用。
+  if (eventNote.finger != null) {
+    return { letter, finger: eventNote.finger, boxedFinger: true };
+  }
+
+  // 降级兜底：suggestedFinger 基于固定锚点，对音域较宽的曲子容易误判为"换"；
+  // 只在算出明确 1-5 指时才显示，避免刷屏式误导。
   const finger = suggestedFinger(eventNote, p);
-  if (finger.number == null && !finger.needsShift) return { letter };
-  return {
-    letter,
-    finger: finger.needsShift ? '换' : finger.number,
-    boxedFinger: true,
-  };
+  if (finger.number == null) return { letter };
+  return { letter, finger: finger.number, boxedFinger: true };
 }
 
 function renderPracticeScore(p) {
@@ -1234,6 +1499,21 @@ function renderPracticeScore(p) {
     noteToneFor:note => practiceNoteTone(note, p),
     noteAnnotationFor:(note, track) => practiceScoreAnnotation(note, track, p),
   }));
+
+  // 只有开始真实评分后才跟随当前音。连接 MIDI / 选择输入方式时，应完整保留说明卡。
+  const shouldFollowCurrentNote = !p.finished && (p.inputMode === 'computer-keyboard' || p.midiStatus === 'connected');
+  if (shouldFollowCurrentNote) {
+    const anchor = document.getElementById('practice-current');
+    if (anchor) {
+      const content = anchor.closest('.content');
+      if (content) {
+        const anchorRect = anchor.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
+        const targetScrollTop = content.scrollTop + (anchorRect.top - contentRect.top) - contentRect.height * 0.35;
+        content.scrollTop = Math.max(0, targetScrollTop);
+      }
+    }
+  }
 }
 
 function renderPracticeScorePanel(p) {
@@ -1410,27 +1690,43 @@ function render() {
   const root = document.getElementById('root');
   const { view, activeSong } = state;
 
+  // root.innerHTML 会整体销毁重建 .content/.sf-body，导致其 scrollTop 被重置为 0。
+  // 练习评分页每弹一个音就调用一次 render()，若不保留滚动位置，画面会在弹奏
+  // 过程中不断被强制拉回顶部。这里只在"同一个视图内容"重新渲染时才恢复滚动位置——
+  // 真正切换到别的视图/曲目/关卡时，滚动位置理应重置为顶部。
+  const renderKey = view === 'detail' ? `detail:${activeSong?.id ?? ''}`
+    : view === 'practice-session' ? `practice:${state.practice?.courseId ?? ''}/${state.practice?.lessonId ?? ''}`
+    : view;
+  const prevScroller = root.querySelector('.content') || root.querySelector('.sf-body');
+  const prevScrollTop = (prevScroller && root.dataset.renderKey === renderKey) ? prevScroller.scrollTop : 0;
+  root.dataset.renderKey = renderKey;
+
   // 曲目详情：全屏横版
   if (view === 'detail' && activeSong) {
     root.innerHTML = renderDetailFullscreen(activeSong);
+    const nextScroller = root.querySelector('.sf-body');
+    if (nextScroller) nextScroller.scrollTop = prevScrollTop;
     requestAnimationFrame(renderActiveScore);
     return;
   }
 
-  let hdrTitle = '🎹 练琴';
+  let hdrTitle = '课程';
   let body = '';
 
   if (view === 'songs') {
-    hdrTitle = '🎹 曲目库';
+    hdrTitle = '曲目库';
     body = renderSongs();
   } else if (view === 'tasks') {
-    hdrTitle = '📋 本周计划';
+    hdrTitle = '本周计划';
     body = renderTasks();
   } else if (view === 'courses') {
-    hdrTitle = '🎯 课程';
+    hdrTitle = '课程';
     body = renderCourses();
+  } else if (view === 'drills') {
+    hdrTitle = '专项训练';
+    body = renderDrills();
   } else if (view === 'import') {
-    hdrTitle = '➕ 导入新曲目';
+    hdrTitle = '导入新曲目';
     body = renderImport();
   } else if (view === 'course-detail') {
     hdrTitle = state.activeCourse ? state.activeCourse.title : '课程';
@@ -1444,23 +1740,34 @@ function render() {
   const backFn = view==='practice-session' ? 'exitPracticeSession' : 'backToCourses';
   root.innerHTML = `
     <div class="hdr">
-      ${showBack ? `<div class="hdr-back" onclick="${backFn}()">‹</div>` : ''}
-      <div class="hdr-title">${hdrTitle}</div>
+      <div class="hdr-shell">
+        ${showBack ? `<div class="hdr-back" onclick="${backFn}()">‹</div>` : ''}
+        <div class="hdr-title">${hdrTitle}</div>
+      </div>
     </div>
-    <div class="content">${body}</div>
+    <div class="content"><main class="content-inner">${body}</main></div>
     ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ''}
     <div class="tab-bar">
+      <div class="tab${(view==='courses'||view==='import'||view==='course-detail'||view==='practice-session')?' active':''}" onclick="setView('courses')">
+        <span class="icon" aria-hidden="true">♬</span>课程
+      </div>
+      <div class="tab${view==='drills'?' active':''}" onclick="setView('drills')">
+        <span class="icon" aria-hidden="true">⌘</span>专项
+      </div>
       <div class="tab${view==='songs'?' active':''}" onclick="setView('songs')">
-        <span class="icon">🎵</span>曲目库
+        <span class="icon" aria-hidden="true">♫</span>曲目库
       </div>
       <div class="tab${view==='tasks'?' active':''}" onclick="setView('tasks')">
-        <span class="icon">📋</span>本周计划
-      </div>
-      <div class="tab${(view==='courses'||view==='import'||view==='course-detail'||view==='practice-session')?' active':''}" onclick="setView('courses')">
-        <span class="icon">🎯</span>课程
+        <span class="icon" aria-hidden="true">□</span>计划
       </div>
     </div>`;
-  if (view === 'practice-session') requestAnimationFrame(() => renderPracticeScore(state.practice));
+  const nextScroller = root.querySelector('.content');
+  if (view === 'practice-session') {
+    // 练习页不做手动滚动恢复 —— renderPracticeScore 内部会通过 #practice-current 锚点自动定位
+    requestAnimationFrame(() => renderPracticeScore(state.practice));
+  } else {
+    if (nextScroller) nextScroller.scrollTop = prevScrollTop;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -1472,6 +1779,11 @@ function setView(v) {
     clearPracticeCountdown(state.practice);
     disconnectPracticeMidi();
     state.practice = null;
+    const timer = state.practiceTimer;
+    if (timer.active && timer.startTime && timer.lastActivity) {
+      const toCredit = Math.max(0, Math.floor((timer.lastActivity - timer.startTime) / 1000));
+      endPracticeTimerSession(toCredit);
+    }
   }
   state.view = v;
   state.activeSong = null;
@@ -1564,10 +1876,11 @@ async function apiPost(path, body) {
 async function loadCourses() {
   state.coursesLoaded = true;
   try {
-    const [courseResult, settingsResult, drillsResult] = await Promise.allSettled([
-      apiGet('/api/courses'),
+    const [courseResult, settingsResult, drillsResult, timeResult] = await Promise.allSettled([
+      apiGet('/api/courses?user=' + encodeURIComponent(state.currentUser)),
       apiGet('/api/settings'),
       apiGet('/api/drills'),
+      apiGet('/api/practice-time'),
     ]);
     if (courseResult.status !== 'fulfilled') throw courseResult.reason;
     state.courses = courseResult.value.courses;
@@ -1575,6 +1888,11 @@ async function loadCourses() {
     if (drillsResult.status === 'fulfilled') {
       state.drillFingering = {};
       for (const d of drillsResult.value.drills || []) state.drillFingering[d.id] = d.fingering;
+    }
+    if (timeResult.status === 'fulfilled') {
+      for (const user of PRACTICE_USERS) {
+        state.practiceTimeStats[user] = timeResult.value.users?.[user] || 0;
+      }
     }
   } catch (e) {
     showToast('加载课程失败：' + e.message);
@@ -1609,13 +1927,58 @@ function getRecommendedPractice() {
 }
 
 function courseCard(c) {
+  const progress = courseProgress(c);
+  const isDrill = c.category === 'drill';
+  const isFingering = c.drill_group === 'fingering';
+  const variant = isDrill ? (isFingering ? 'drill-fingering' : 'drill-technique') : 'song';
+  const mark = isDrill ? (isFingering ? '指' : '基') : '曲';
+  const kind = isDrill ? (isFingering ? '指法专项' : '基本功') : '曲目闯关';
   return `
-    <div class="course-card" onclick="openCourse('${c.course_id}')">
-      <div class="course-card-title">${escapeHtml(c.title)}</div>
-      <div class="course-card-sub">${c.bpm} BPM · ${c.measure_count} 小节 · ${c.lessons.filter(l=>l.completed).length}/${c.lessons.length} 关卡完成</div>
-      <div class="course-progress-track"><div class="course-progress-fill" style="width:${courseProgress(c)}%"></div></div>
-    </div>
+    <article class="course-card course-card--${variant}" role="button" tabindex="0"
+      onclick="openCourse('${c.course_id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openCourse('${c.course_id}')}">
+      <div class="course-card-top">
+        <div class="course-card-mark" aria-hidden="true">${mark}</div>
+        <div class="course-card-main">
+          <div class="course-card-title">${escapeHtml(c.title)}</div>
+          <div class="course-card-sub">${kind} · ${c.bpm} BPM · ${c.measure_count} 小节</div>
+        </div>
+        <div class="course-card-arrow" aria-hidden="true">›</div>
+      </div>
+      <div class="course-card-foot">
+        <div class="course-progress-track"><div class="course-progress-fill" style="width:${progress}%"></div></div>
+        <span class="course-card-status">${progress}%</span>
+        <span class="course-card-progress">${c.lessons.filter(l=>l.completed).length}/${c.lessons.length} 关</span>
+      </div>
+    </article>
   `;
+}
+
+function renderPtimeBarChart() {
+  const liveSeconds = state.practiceTimer.active && state.practiceTimer.startTime
+    ? Math.floor((Date.now() - state.practiceTimer.startTime) / 1000) : 0;
+  const totals = PRACTICE_USERS.map(u => {
+    const base = state.practiceTimeStats[u] || 0;
+    return u === state.currentUser ? base + liveSeconds : base;
+  });
+  const maxVal = Math.max(...totals, 1);
+  const rows = PRACTICE_USERS.map((u, i) => {
+    const pct = Math.round((totals[i] / maxVal) * 100);
+    const isActive = u === state.currentUser;
+    const liveTag = isActive && liveSeconds > 0
+      ? `<span class="ptime-live-dot">●</span>`
+      : '';
+    return `
+      <div class="ptime-bar-row" onclick="switchPracticeUser('${escapeHtml(u)}')">
+        <div class="ptime-bar-label${isActive ? ' ptime-bar-label--active' : ''}">
+          ${escapeHtml(u)}${liveTag}
+        </div>
+        <div class="ptime-bar-track">
+          <div class="ptime-bar-fill ptime-bar-fill--${i}" style="width:${pct}%"></div>
+        </div>
+        <div class="ptime-bar-value ptime-bar-value--${i}">${formatPracticeTime(totals[i])}</div>
+      </div>`;
+  }).join('');
+  return `<div class="ptime-widget">${rows}</div>`;
 }
 
 function renderCourses() {
@@ -1625,32 +1988,90 @@ function renderCourses() {
   const fingeringDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'fingering');
   const techniqueDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'technique');
   const songCards = songs.map(courseCard).join('');
-  const fingeringCards = fingeringDrills.map(courseCard).join('');
-  const techniqueCards = techniqueDrills.map(courseCard).join('');
   return `
-    ${recommended ? `
-      <div class="course-resume">
-        <div class="course-resume-kicker">${recommended.isResume ? '继续练习' : '推荐课程'}</div>
-        <div class="course-resume-title">${escapeHtml(recommended.course.title)} · ${escapeHtml(recommended.lesson.title)}</div>
-        <div class="course-resume-meta">${HAND_LABEL[recommended.lesson.hand_mode] || recommended.lesson.hand_mode} · ${Math.round(recommended.lesson.speed * 100)}% 速度 · 等待模式</div>
-        <div class="course-resume-actions">
-          <button class="btn btn-primary" onclick="openPracticeSession('${recommended.course.course_id}','${recommended.lesson.lesson_id}')">开始评分练习</button>
-          <button class="btn btn-secondary" onclick="openCourse('${recommended.course.course_id}')">课程详情</button>
-        </div>
+    <div class="course-home">
+      <div class="course-home-top">
+        ${recommended ? `
+          <section class="course-resume">
+            <div class="course-resume-kicker">${recommended.isResume ? '继续练习' : '下一步建议'}</div>
+            <div class="course-resume-title">${escapeHtml(recommended.course.title)} · ${escapeHtml(recommended.lesson.title)}</div>
+            <div class="course-resume-meta">${HAND_LABEL[recommended.lesson.hand_mode] || recommended.lesson.hand_mode} · ${Math.round(recommended.lesson.speed * 100)}% 速度 · 等待模式</div>
+            <div class="course-resume-actions">
+              <button class="btn btn-primary" onclick="openPracticeSession('${recommended.course.course_id}','${recommended.lesson.lesson_id}')">开始评分练习</button>
+              <button class="btn btn-secondary" onclick="openCourse('${recommended.course.course_id}')">查看课程</button>
+            </div>
+          </section>
+        ` : `<section class="course-resume"><div class="course-resume-kicker">课程已完成</div><div class="course-resume-title">选择一首曲子继续练习</div></section>`}
+        ${renderPtimeBarChart()}
       </div>
-    ` : ''}
-    <div class="course-list-heading">曲目课程</div>
-    ${songCards || '<div class="empty-hint">还没有可练的曲目课程。</div>'}
-    ${fingeringDrills.length ? `
-      <div class="course-list-heading">🖐️ 指法训练</div>
-      ${fingeringCards}
-    ` : ''}
-    ${techniqueDrills.length ? `
-      <div class="course-list-heading">🎹 基本功训练</div>
-      ${techniqueCards}
-    ` : ''}
-    <div class="add-course-btn" onclick="startImport()">
-      <span>＋</span><span>添加自己的 MIDI（可选）</span>
+      <section class="course-section">
+        <div class="course-section-head">
+          <div>
+            <div class="course-section-eyebrow">曲目闯关</div>
+            <div class="course-section-title">从熟悉的旋律开始</div>
+          </div>
+          <div class="course-section-meta">${songs.length} 首曲目 · 按自己的节奏推进</div>
+        </div>
+        <div class="course-grid">${songCards || '<div class="empty-hint">还没有可练的曲目课程。</div>'}</div>
+      </section>
+      <section class="training-portal" role="button" tabindex="0" onclick="setView('drills')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setView('drills')}">
+        <div class="training-portal-mark" aria-hidden="true">⌘</div>
+        <div>
+          <div class="training-portal-title">专项训练库</div>
+          <div class="training-portal-copy">${fingeringDrills.length} 项指法动作 · ${techniqueDrills.length} 项基本功 · 每项都有独立关卡和指法</div>
+        </div>
+        <div class="training-portal-action">进入专项训练 ›</div>
+      </section>
+      <div class="add-course-btn" onclick="startImport()">
+        <span>＋</span><span>添加自己的 MIDI（可选）</span>
+      </div>
+    </div>
+  `;
+}
+
+function setDrillFilter(filter) {
+  state.drillFilter = filter;
+  render();
+}
+
+function renderDrills() {
+  if (!state.coursesLoaded) return `<div class="empty-hint">加载中…</div>`;
+  const fingeringDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'fingering');
+  const techniqueDrills = state.courses.filter(c => c.category === 'drill' && c.drill_group === 'technique');
+  const filtered = state.drillFilter === 'fingering'
+    ? fingeringDrills
+    : state.drillFilter === 'technique'
+      ? techniqueDrills
+      : [...fingeringDrills, ...techniqueDrills];
+  const filter = state.drillFilter;
+  return `
+    <div class="drill-home">
+      <header class="drill-intro">
+        <div>
+          <div class="course-section-eyebrow">专项特训</div>
+          <h2>把每一个动作练清楚</h2>
+          <p>从顺指、穿指、扩指、跨指、缩指，到音阶、琶音、双音、和弦、八度与震音。每项训练都保留五线谱、字母音名和指法提示。</p>
+        </div>
+        <div class="drill-stat-list" aria-label="专项训练数量">
+          <div class="drill-stat"><strong>${fingeringDrills.length}</strong><span>指法训练</span></div>
+          <div class="drill-stat"><strong>${techniqueDrills.length}</strong><span>基本功</span></div>
+        </div>
+      </header>
+      <div class="drill-filter" role="tablist" aria-label="筛选专项训练">
+        <button class="${filter === 'all' ? 'active' : ''}" onclick="setDrillFilter('all')">全部</button>
+        <button class="${filter === 'fingering' ? 'active' : ''}" onclick="setDrillFilter('fingering')">指法动作</button>
+        <button class="${filter === 'technique' ? 'active' : ''}" onclick="setDrillFilter('technique')">基本功</button>
+      </div>
+      <section class="course-section">
+        <div class="course-section-head">
+          <div>
+            <div class="course-section-eyebrow">${filter === 'fingering' ? '指法训练' : filter === 'technique' ? '基本功训练' : '训练清单'}</div>
+            <div class="course-section-title">${filter === 'all' ? '选择今天想加强的一项' : filter === 'fingering' ? '手位与手指衔接' : '稳定、均匀与力量控制'}</div>
+          </div>
+          <div class="course-section-meta">${filtered.length} 项可练</div>
+        </div>
+        <div class="course-grid">${filtered.map(courseCard).join('') || '<div class="empty-hint">暂时没有这个分类的训练。</div>'}</div>
+      </section>
     </div>
   `;
 }
@@ -1830,7 +2251,7 @@ async function openCourse(courseId) {
   state.view = 'course-detail';
   render();
   try {
-    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`);
     state.activeCourse = course;
   } catch (e) {
     showToast('加载课程失败：' + e.message);
@@ -1920,7 +2341,7 @@ async function submitManualLesson(courseId) {
     if (d.range_type === 'event') { spec.start_event = d.start; spec.end_event = d.end; }
     else { spec.start_measure = d.start; spec.end_measure = d.end; }
     await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons`, spec);
-    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`);
     state.activeCourse = course;
     state.manualDraft = null;
     showToast('已添加手动关卡');
@@ -1990,8 +2411,8 @@ async function startPractice(courseId, lessonId) {
 
 async function toggleLessonComplete(courseId, lessonId, completed) {
   try {
-    await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/complete`, { completed });
-    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}`);
+    await apiPost(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/complete`, { completed, user: state.currentUser });
+    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`);
     state.activeCourse = course;
     render();
   } catch (e) {
@@ -2104,7 +2525,7 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
   render();
   try {
     const [{ course }, practiceData] = await Promise.all([
-      apiGet(`/api/courses/${encodeURIComponent(courseId)}`),
+      apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`),
       apiGet(`/api/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}/practice-data`),
     ]);
     if (!state.practice || state.practice.lessonId !== lessonId) return; // navigated away while loading
@@ -2223,7 +2644,7 @@ function schedulePracticeMidiRefresh(p, access, event) {
 
 function applyPracticeInput(p, pitch, isNoteOn) {
   if (!p || !p.session || p.finished || p.finishing) return;
-  if (isNoteOn) p.session.noteOn(pitch);
+  if (isNoteOn) { onPracticeActivity(); p.session.noteOn(pitch); }
   else p.session.noteOff(pitch);
   p.result = p.session.getResult();
   if (p.result.isComplete) finishPracticeSession();
@@ -2248,7 +2669,7 @@ async function finishPracticeSession() {
   try {
     const { lesson, runPassed, completed, justCompleted, nextLesson, starCount, successfulRuns, requiredRuns } = await apiPost(
       `/api/courses/${encodeURIComponent(p.courseId)}/lessons/${encodeURIComponent(p.lessonId)}/sessions`,
-      result,
+      { ...result, user: state.currentUser },
     );
     p.lesson = lesson;
     p.finished = { runPassed, completed, justCompleted, nextLesson, lesson, starCount, successfulRuns, requiredRuns };
@@ -2462,7 +2883,7 @@ function renderPracticeSession() {
     const retryable = p.midiStatus === 'no-devices' || p.midiStatus === 'denied';
     return `
       <div class="practice-wrap">
-        <div class="midi-status-card">
+        <div class="midi-status-card" role="status">
           <div class="midi-status-icon">${info.icon}</div>
           <div>${escapeHtml(info.text)}</div>
           <div class="btn-row" style="justify-content:center;">
@@ -2491,10 +2912,17 @@ function renderPracticeSession() {
 
   return `
     <div class="practice-wrap">
+      ${state.practiceTimeWarning ? `
+        <div class="practice-overtime-banner">
+          ⏰ 已连续练习超过 20 分钟，建议今天先休息，明天再来效果更好！
+        </div>` : ''}
       <div class="practice-lesson-meta">
         <div class="practice-progress">第 ${p.session.getEventIndex() + 1} / ${p.events.length} 个音符事件</div>
         <div class="practice-stage">${dots}</div>
         <div class="practice-run-progress">本关累计达标 <strong>${runProgress.successfulRuns} / ${runProgress.requiredRuns}</strong> 次</div>
+        ${state.practiceTimer.active && state.practiceTimer.startTime
+          ? `<div class="practice-timer-live">⏱ ${escapeHtml(state.currentUser)} · ${formatPracticeTime(Math.floor((Date.now() - state.practiceTimer.startTime) / 1000))}</div>`
+          : ''}
       </div>
       ${renderPracticeScorePanel(p)}
       <div class="practice-now-summary">

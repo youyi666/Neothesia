@@ -15,11 +15,89 @@ const path = require('path');
 const { readMidi } = require('./midi-file.js');
 const { analyzeSong, extractTrackNotes, groupIntoEvents } = require('./analyze.js');
 const { exportLessonBuffer } = require('./lesson-export.js');
+const { predictFingeringForEvents } = require('./fingering-engine.js');
 
 const APP_ROOT = path.join(__dirname, '..');
 const COURSES_ROOT = path.join(APP_ROOT, 'courses');
 const SETTINGS_PATH = path.join(APP_ROOT, 'data', 'settings.json');
 const DEFAULT_COURSE_ID = 'twinkle_both';
+const USER_PROGRESS_ROOT = path.join(APP_ROOT, 'data', 'user_progress');
+const MIGRATION_DONE_PATH = path.join(APP_ROOT, 'data', '.per_user_migrated');
+
+// Maps course_id → user who owns existing legacy progress (everything else → 罗俊生)
+const LEGACY_COURSE_OWNER = { qinghuaci: '李俊' };
+const LEGACY_DEFAULT_USER = '罗俊生';
+
+function userProgressPath(user, courseId) {
+  return path.join(USER_PROGRESS_ROOT, user, `${courseId}.json`);
+}
+
+function loadUserProgress(user, courseId) {
+  if (!user) return null;
+  try {
+    const p = userProgressPath(user, courseId);
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {}
+  return null; // null = no per-user file yet (new user on this course)
+}
+
+function saveUserProgress(user, courseId, progressMap) {
+  ensureDir(path.join(USER_PROGRESS_ROOT, user));
+  fs.writeFileSync(userProgressPath(user, courseId), JSON.stringify(progressMap, null, 2), 'utf8');
+}
+
+// One-time migration: move progress out of course.json into per-user files.
+// Runs at module load if not already done.
+function migrateToPerUserProgress() {
+  if (fs.existsSync(MIGRATION_DONE_PATH)) return;
+  if (!fs.existsSync(COURSES_ROOT)) {
+    fs.writeFileSync(MIGRATION_DONE_PATH, new Date().toISOString(), 'utf8');
+    return;
+  }
+  const courseIds = fs.readdirSync(COURSES_ROOT, { withFileTypes: true })
+    .filter(e => e.isDirectory() && fs.existsSync(path.join(COURSES_ROOT, e.name, 'course.json')))
+    .map(e => e.name);
+
+  for (const courseId of courseIds) {
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(COURSES_ROOT, courseId, 'course.json'), 'utf8'));
+      const lessons = data.lessons || [];
+      const owner = LEGACY_COURSE_OWNER[courseId] || LEGACY_DEFAULT_USER;
+      const progressMap = {};
+      let anyProgress = false;
+      for (const lesson of lessons) {
+        const hasData = lesson.completed || (lesson.successful_runs || 0) > 0 || lesson.unlocked;
+        if (hasData) {
+          anyProgress = true;
+          progressMap[lesson.lesson_id] = {
+            successful_runs: lesson.successful_runs || 0,
+            completed: lesson.completed || false,
+            best_score: lesson.best_score || null,
+            best_star_count: lesson.best_star_count || null,
+            unlocked: lesson.unlocked || false,
+            sessions: (lesson.sessions || []).slice(-20),
+          };
+        }
+      }
+      if (anyProgress) saveUserProgress(owner, courseId, progressMap);
+      // Reset course.json: only first lesson stays unlocked, no progress data
+      for (let i = 0; i < lessons.length; i++) {
+        lessons[i].successful_runs = 0;
+        lessons[i].completed = false;
+        lessons[i].best_score = null;
+        lessons[i].best_star_count = null;
+        lessons[i].sessions = [];
+        lessons[i].unlocked = (i === 0);
+      }
+      data.completion_rate = 0;
+      fs.writeFileSync(path.join(COURSES_ROOT, courseId, 'course.json'), JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {
+      console.error('[Migration] Error on', courseId, e.message);
+    }
+  }
+  fs.writeFileSync(MIGRATION_DONE_PATH, new Date().toISOString(), 'utf8');
+  console.log('[Migration] Per-user progress extracted to', USER_PROGRESS_ROOT);
+}
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -33,10 +111,28 @@ function coursePath(courseId) {
   return path.join(courseDir(courseId), 'course.json');
 }
 
-function loadCourse(courseId) {
+function loadCourse(courseId, user = null) {
   const data = fs.readFileSync(coursePath(courseId), 'utf8');
   const course = JSON.parse(data);
-  for (const lesson of course.lessons || []) normalizeLessonProgress(lesson);
+  if (user) {
+    const up = loadUserProgress(user, courseId); // { lessonId: {...} } or null
+    course.lessons = (course.lessons || []).map(lesson => {
+      const p = up ? (up[lesson.lesson_id] || null) : null;
+      return normalizeLessonProgress({
+        ...lesson,
+        successful_runs: p ? (p.successful_runs ?? 0) : 0,
+        completed:        p ? (p.completed ?? false) : false,
+        best_score:       p ? (p.best_score ?? null) : null,
+        best_star_count:  p ? (p.best_star_count ?? null) : null,
+        unlocked:         p ? (p.unlocked ?? lesson.unlocked) : lesson.unlocked,
+        sessions:         p ? (p.sessions || []) : [],
+      });
+    });
+    const done = course.lessons.filter(l => l.completed).length;
+    course.completion_rate = course.lessons.length ? done / course.lessons.length : 0;
+  } else {
+    for (const lesson of course.lessons || []) normalizeLessonProgress(lesson);
+  }
   return course;
 }
 
@@ -46,7 +142,7 @@ function saveCourse(courseId, course) {
   return course;
 }
 
-function listCourses() {
+function listCourses(user = null) {
   if (!fs.existsSync(COURSES_ROOT)) return [];
   const courses = fs
     .readdirSync(COURSES_ROOT, { withFileTypes: true })
@@ -55,9 +151,8 @@ function listCourses() {
     .filter(id => fs.existsSync(coursePath(id)))
     .map(id => {
       try {
-        return loadCourse(id);
+        return loadCourse(id, user);
       } catch (error) {
-        // A course directory may disappear between existsSync and readFileSync.
         if (error && error.code === 'ENOENT') return null;
         throw error;
       }
@@ -312,8 +407,8 @@ function addManualLesson(courseId, lessonSpec) {
   return lesson;
 }
 
-function setLessonCompleted(courseId, lessonId, completed = true) {
-  const course = loadCourse(courseId);
+function setLessonCompleted(courseId, lessonId, completed = true, user = null) {
+  const course = loadCourse(courseId, user);
   const index = course.lessons.findIndex(l => l.lesson_id === lessonId);
   if (index === -1) throw new Error(`Unknown lesson_id: ${lessonId}`);
   const lesson = normalizeLessonProgress(course.lessons[index]);
@@ -324,7 +419,22 @@ function setLessonCompleted(courseId, lessonId, completed = true) {
   }
   const completedCount = course.lessons.filter(l => l.completed).length;
   course.completion_rate = course.lessons.length ? completedCount / course.lessons.length : 0;
-  saveCourse(courseId, course);
+  if (user) {
+    const progressMap = {};
+    for (const l of course.lessons) {
+      progressMap[l.lesson_id] = {
+        successful_runs: l.successful_runs || 0,
+        completed: l.completed || false,
+        best_score: l.best_score || null,
+        best_star_count: l.best_star_count || null,
+        unlocked: l.unlocked || false,
+        sessions: (l.sessions || []).slice(-20),
+      };
+    }
+    saveUserProgress(user, courseId, progressMap);
+  } else {
+    saveCourse(courseId, course);
+  }
   return course.lessons[index];
 }
 
@@ -364,8 +474,8 @@ function calculateStarCount(result, passCondition) {
   return 1;
 }
 
-function recordPracticeResult(courseId, lessonId, result) {
-  const course = loadCourse(courseId);
+function recordPracticeResult(courseId, lessonId, result, user = null) {
+  const course = loadCourse(courseId, user);
   const index = course.lessons.findIndex(l => l.lesson_id === lessonId);
   if (index === -1) throw new Error(`Unknown lesson_id: ${lessonId}`);
   const lesson = normalizeLessonProgress(course.lessons[index]);
@@ -408,7 +518,22 @@ function recordPracticeResult(courseId, lessonId, result) {
     ? course.lessons[index + 1]
     : null;
   course.completion_rate = course.lessons.length ? course.lessons.filter(l => l.completed).length / course.lessons.length : 0;
-  saveCourse(courseId, course);
+  if (user) {
+    const progressMap = {};
+    for (const l of course.lessons) {
+      progressMap[l.lesson_id] = {
+        successful_runs: l.successful_runs || 0,
+        completed: l.completed || false,
+        best_score: l.best_score || null,
+        best_star_count: l.best_star_count || null,
+        unlocked: l.unlocked || false,
+        sessions: (l.sessions || []).slice(-20),
+      };
+    }
+    saveUserProgress(user, courseId, progressMap);
+  } else {
+    saveCourse(courseId, course);
+  }
   return {
     lesson,
     runPassed,
@@ -504,7 +629,13 @@ function serializeLessonEvents(events) {
   return events.map((event, index) => ({
     index,
     tick: event.tick,
-    notes: event.notes.map(n => ({ note: n.note, hand: n.hand, velocity: n.velocity })),
+    // finger 字段由 predictFingeringForEvents 在序列化前注入，透传给前端
+    notes: event.notes.map(n => ({
+      note: n.note,
+      hand: n.hand,
+      velocity: n.velocity,
+      ...(n.finger != null ? { finger: n.finger } : {}),
+    })),
   }));
 }
 
@@ -519,6 +650,22 @@ function getLessonEvents(courseId, lessonId) {
 
 function noteIdentity(note, hand) {
   return `${hand}:${note.channel}:${note.tick}:${note.note}`;
+}
+
+// 从混合手的 slice 事件中，提取单手的独立事件序列（每个元素 = 该手某 tick 的所有音符）。
+// 音符已按 tick+note 升序排好（analyze.js extractTrackNotes 保证），这里只需按 tick 聚合。
+function buildHandEvents(slice, hand) {
+  const byTick = new Map();
+  for (const event of slice) {
+    const notes = event.notes.filter(n => n.hand === hand);
+    if (!notes.length) continue;
+    if (!byTick.has(event.tick)) byTick.set(event.tick, []);
+    byTick.get(event.tick).push(...notes);
+  }
+  // 返回按 tick 排序的事件数组（每项 notes 按音高升序，与 extractTrackNotes 保持一致）
+  return [...byTick.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, notes]) => ({ notes: notes.sort((a, b) => a.note - b.note) }));
 }
 
 // The practice page needs the entire course score as well as the playable
@@ -543,6 +690,13 @@ function getLessonPracticeData(courseId, lessonId) {
       })),
     };
   };
+
+  // ── Viterbi 指法预算（在序列化前直接修改 slice 中的 note 对象）────────
+  // 按手拆分 slice 事件，每手独立跑 DP，音符已按音高升序排好（analyze.js 保证）
+  const rightHandEvents = buildHandEvents(slice, 'right');
+  const leftHandEvents  = buildHandEvents(slice, 'left');
+  if (rightHandEvents.length) predictFingeringForEvents(rightHandEvents, 'right');
+  if (leftHandEvents.length)  predictFingeringForEvents(leftHandEvents,  'left');
 
   const analysis = analyzeSong(midi, { title: course.title });
   const tracks = [
@@ -697,6 +851,9 @@ function seedDefaultCourses(midiRoot) {
 
   return results;
 }
+
+// Run migration once at module load so all API calls see per-user progress
+migrateToPerUserProgress();
 
 module.exports = {
   COURSES_ROOT,
