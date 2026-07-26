@@ -28,7 +28,7 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .hdr { height:var(--hdr-h); background:var(--primary); color:#fff; display:flex; align-items:center; padding:0 16px; flex-shrink:0; }
 .hdr-title { font-size:17px; font-weight:600; flex:1; }
 .hdr-back { font-size:22px; margin-right:10px; cursor:pointer; }
-.content { flex:1; overflow-y:auto; padding:14px 12px 8px; }
+.content { flex:1; overflow-y:auto; padding:14px 12px 8px; overflow-anchor:none; }
 .tab-bar { height:var(--tab-h); background:#fff; border-top:1px solid var(--border); display:flex; flex-shrink:0; }
 .tab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:11px; color:var(--muted); cursor:pointer; transition:color .2s; }
 .tab.active { color:var(--primary); }
@@ -90,7 +90,7 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .pb1{background:#fef5e4;color:#a06800}
 .pb2{background:#eaf4fd;color:#1a5a8a}
 .pb3{background:#eafaf1;color:#1a6b3a}
-.sf-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+.sf-body { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; overflow-anchor:none; }
 .sheet-section { margin-bottom:20px; }
 .sheet-label {
   font-size:11px; font-weight:700; color:var(--primary);
@@ -1579,11 +1579,8 @@ function renderPracticeScore(p) {
 
   const currentAnchor = mount.querySelector('.practice-current-anchor');
   const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
-  const hadPreviousSystem = Number.isInteger(p.lastScoreSystem);
-  const systemChanged = Number.isInteger(currentSystem)
-    && (!hadPreviousSystem || currentSystem !== p.lastScoreSystem);
   p.lastScoreSystem = Number.isInteger(currentSystem) ? currentSystem : null;
-  if (systemChanged) {
+  if (currentAnchor && Number.isInteger(currentSystem)) {
     const systemSelector = `.practice-current-anchor[data-practice-system="${currentSystem}"]`;
     requestAnimationFrame(() => scrollPracticeSystemIntoView(mount.querySelector(systemSelector)));
   }
@@ -1599,7 +1596,11 @@ function scrollPracticeSystemIntoView(anchor) {
   const bottomSafeZone = contentRect.bottom - 92;
   if (anchorRect.top >= topSafeZone && anchorRect.bottom <= bottomSafeZone) return;
   const targetScrollTop = content.scrollTop + (anchorRect.top - contentRect.top) - contentRect.height * 0.36;
-  content.scrollTo({ top:Math.max(0, targetScrollTop), behavior:'smooth' });
+  const maxScrollTop = Math.max(0, content.scrollHeight - content.clientHeight);
+  // 评分页会在每个音符后重建 DOM，平滑滚动尚未结束就会被下一次重绘打断，
+  // 于是第三个系统开始出现“光标在下面、页面却停在上面”。换行时一次定位，
+  // 同一行内完全不动，才能和练习输入保持同步。
+  content.scrollTop = Math.min(maxScrollTop, Math.max(0, targetScrollTop));
 }
 
 function renderScoreModeControls() {
@@ -1858,6 +1859,10 @@ function render() {
       </div>
     </div>`;
   const nextScroller = root.querySelector('.content');
+  if (nextScroller) nextScroller.scrollTop = prevScrollTop;
+  if (view === 'practice-session') {
+    requestAnimationFrame(() => renderPracticeScore(state.practice));
+  }
   // root.innerHTML 重建了滚动容器，先同步恢复用户刚才的位置；
   // 下一帧再由 renderPracticeScore 处理跨系统的光标跟随。
   if (nextScroller) nextScroller.scrollTop = prevScrollTop;
