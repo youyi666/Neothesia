@@ -1321,7 +1321,8 @@ function drawStaff(svg, options) {
   }
 
   const beatWidth = measureWidth / beatsPerMeasure;
-  const xForBeat = beat => contentX + (beat - systemStart + 0.31) * beatWidth;
+  // 留出音符头、升号、指法框和当前指针的右侧安全区，避免最后一拍被 SVG 裁掉。
+  const xForBeat = beat => Math.min(width - 32, contentX + (beat - systemStart + 0.31) * beatWidth);
 
   for (const rest of rests) {
     if (rest.start >= systemStart - 0.001 && rest.start < systemEnd - 0.001) {
@@ -1372,6 +1373,8 @@ function buildStaffSvg(score, width, showNames, options = {}) {
   const viewWidth = Math.max(300, width);
   const viewHeight = topPadding + systemCount * systemHeight;
   const contentX = 78;
+  const rightContentPadding = 44;
+  const noteRightEdge = viewWidth - 32;
   const svg = svgEl('svg', {
     viewBox:`0 0 ${viewWidth} ${viewHeight}`,
     role:'img',
@@ -1391,7 +1394,7 @@ function buildStaffSvg(score, width, showNames, options = {}) {
     const systemTop = topPadding + system * systemHeight;
     const trebleTop = systemTop + 18;
     const bassTop = trebleTop + (compactLandscape ? 92 : 104);
-    const measureWidth = (viewWidth - contentX - 12) / systemMeasures;
+    const measureWidth = (viewWidth - contentX - rightContentPadding) / systemMeasures;
 
     if (!lessonMode) {
       for (let measure = 0; measure < systemMeasures; measure++) {
@@ -1439,7 +1442,7 @@ function buildStaffSvg(score, width, showNames, options = {}) {
         .find(note => note.eventIndex === options.currentEventIndex && note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001)
       : null;
     const pointerX = currentNote
-      ? contentX + (currentNote.start - systemStart + 0.31) * (measureWidth / beatsPerMeasure)
+      ? Math.min(noteRightEdge, contentX + (currentNote.start - systemStart + 0.31) * (measureWidth / beatsPerMeasure))
       : null;
     if (pointerX != null) {
       svg.appendChild(svgEl('rect', {
