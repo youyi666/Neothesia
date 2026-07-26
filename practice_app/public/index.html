@@ -1137,7 +1137,7 @@ const NOTE_TONE = {
   mistake: '#d88732',
 };
 
-function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'default', annotation = null, stackIndex = 0) {
+function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'default', annotation = null, stackIndex = 0, systemIndex = 0) {
   const position = staffPosition(note.midi, clef);
   const y = noteY(note.midi, clef, staffTop);
   const duration = note.duration;
@@ -1221,9 +1221,13 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
     }, String(displayedFinger)));
   }
 
-  // 当前要弹奏的音符：插入不可见锚点，供自动滚动定位用
+  // 当前要弹奏的音符：记录所在系统，换行时只滚动一次。
   if (tone === 'current') {
-    svg.appendChild(svgEl('circle', { id:'practice-current', cx:x, cy:y, r:0, fill:'none' }));
+    svg.appendChild(svgEl('circle', {
+      class:'practice-current-anchor',
+      'data-practice-system':String(systemIndex),
+      cx:x, cy:y, r:0, fill:'none',
+    }));
   }
 }
 
@@ -1285,7 +1289,7 @@ function drawRest(svg, rest, x, staffTop) {
 function drawStaff(svg, options) {
   const {
     track, rests, clef, staffTop, width, contentX, measureWidth,
-    systemStart, systemEnd, beatsPerMeasure, systemMeasures,
+    systemStart, systemEnd, beatsPerMeasure, systemMeasures, systemIndex,
     showTime, numerator, denominator, showNames, finalSystem, fingering, noteToneFor, noteAnnotationFor,
   } = options;
 
@@ -1340,7 +1344,7 @@ function drawStaff(svg, options) {
       // 使用模 4 循环：0→1→2→3→0→1…，密集音型最多占 4 个固定高度层，不会无限堆积溢出。
       stackIndex = (lastBoxX != null && Math.abs(x - lastBoxX) < 18) ? (stackIndex + 1) % 4 : 0;
       lastBoxX = x;
-      drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone, annotation, stackIndex);
+      drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone, annotation, stackIndex, systemIndex);
       noteIdx++;
     }
   }
@@ -1420,6 +1424,7 @@ function buildStaffSvg(score, width, showNames, options = {}) {
       systemEnd,
       beatsPerMeasure,
       systemMeasures,
+      systemIndex:system,
       showTime:system === 0,
       numerator:score.numerator,
       denominator:score.denominator,
@@ -1569,6 +1574,29 @@ function renderPracticeScore(p) {
     noteAnnotationFor:(note, track) => practiceScoreAnnotation(note, track, p),
   }));
 
+  const currentAnchor = mount.querySelector('.practice-current-anchor');
+  const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
+  const systemChanged = Number.isInteger(currentSystem)
+    && Number.isInteger(p.lastScoreSystem)
+    && currentSystem !== p.lastScoreSystem;
+  p.lastScoreSystem = Number.isInteger(currentSystem) ? currentSystem : null;
+  if (systemChanged) {
+    const systemSelector = `.practice-current-anchor[data-practice-system="${currentSystem}"]`;
+    requestAnimationFrame(() => scrollPracticeSystemIntoView(mount.querySelector(systemSelector)));
+  }
+}
+
+function scrollPracticeSystemIntoView(anchor) {
+  if (!anchor) return;
+  const content = anchor.closest('.content');
+  if (!content) return;
+  const anchorRect = anchor.getBoundingClientRect();
+  const contentRect = content.getBoundingClientRect();
+  const topSafeZone = contentRect.top + 72;
+  const bottomSafeZone = contentRect.bottom - 92;
+  if (anchorRect.top >= topSafeZone && anchorRect.bottom <= bottomSafeZone) return;
+  const targetScrollTop = content.scrollTop + (anchorRect.top - contentRect.top) - contentRect.height * 0.36;
+  content.scrollTo({ top:Math.max(0, targetScrollTop), behavior:'smooth' });
 }
 
 function renderScoreModeControls() {
@@ -1828,7 +1856,7 @@ function render() {
     </div>`;
   const nextScroller = root.querySelector('.content');
   if (view === 'practice-session') {
-    // 练习页不做手动滚动恢复 —— renderPracticeScore 内部会通过 #practice-current 锚点自动定位
+    // 练习页保留用户滚动位置；renderPracticeScore 只在当前谱面系统变化时定位。
     requestAnimationFrame(() => renderPracticeScore(state.practice));
   } else {
     if (nextScroller) nextScroller.scrollTop = prevScrollTop;
