@@ -595,8 +595,8 @@ body { background:var(--bg); }
   position:sticky;
   top:-24px;
   z-index:20;
-  width:min(100%,980px);
-  margin:-24px 0 12px;
+  width:min(100%,1160px);
+  margin:-24px 0 22px;
   padding:24px 0 10px;
   background:var(--bg);
   border-bottom:1px solid #e2ddec;
@@ -617,14 +617,28 @@ body { background:var(--bg); }
 .practice-now-summary strong { color:var(--text); font-size:20px; line-height:1.2; }
 .practice-next-note { margin-left:auto; display:flex; align-items:baseline; gap:6px; color:var(--muted); font-size:11px; white-space:nowrap; }
 .practice-next-note strong { color:#716781; font-size:13px; font-weight:700; }
-.practice-finger-guide { width:100%; margin:8px 0 0; }
+.practice-current-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding:9px 2px 0; border-top:1px solid #e2ddec; }
+.practice-current-tools .practice-sheet-title span { font-size:10px; }
+.practice-score-layout {
+  display:grid;
+  grid-template-columns:minmax(168px,190px) minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+  width:min(100%,1160px);
+  margin-top:26px;
+}
+.practice-score-layout.active-score-layout { margin-top:0; }
+.active-score-layout .practice-sheet-head { display:none; }
+.practice-finger-float { position:sticky; top:118px; min-width:0; }
+.practice-finger-guide { width:100%; margin:0; }
 .practice-finger-title { margin:0 0 6px 2px; color:var(--muted); font-size:10px; font-weight:800; }
-.practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:7px; }
+.practice-finger-list { grid-template-columns:1fr; gap:7px; }
 .practice-finger-card { min-height:64px; padding:8px 10px; border-radius:7px; background:#fff; }
 .practice-finger-note { font-size:16px; }
 .practice-finger-detail { margin-top:3px; font-size:11px; }
 .practice-finger-key { margin-top:2px; font-size:10px; }
 .practice-sheet { width:min(100%,980px); }
+.practice-score-main, .practice-score-main .practice-sheet { width:100%; min-width:0; }
 .practice-sheet-head { align-items:center; padding:10px 14px; }
 .practice-sheet-title { display:flex; flex-direction:column; gap:3px; min-width:0; }
 .practice-sheet-title strong { font-size:14px; }
@@ -635,11 +649,12 @@ body { background:var(--bg); }
 .score-mode-button:focus-visible { outline:2px solid #9f84df; outline-offset:1px; }
 
 @media (max-width:720px) {
-  .practice-current-panel { top:-14px; margin:-14px 0 10px; padding:14px 0 8px; }
+  .practice-current-panel { top:-14px; margin:-14px 0 14px; padding:14px 0 8px; }
   .practice-now-summary { padding:9px 11px; }
   .practice-now-main { gap:7px; flex-wrap:wrap; }
   .practice-now-summary strong { font-size:17px; }
   .practice-next-note { width:100%; margin:2px 0 0; }
+  .practice-current-tools { align-items:stretch; flex-direction:column; gap:7px; margin-top:8px; padding-top:8px; }
   .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
   .practice-finger-card { min-height:60px; padding:7px 8px; }
   .practice-sheet-head { align-items:stretch; }
@@ -647,12 +662,21 @@ body { background:var(--bg); }
   .score-mode-button { flex:1; padding-left:4px; padding-right:4px; }
 }
 
+@media (max-width:900px) {
+  .practice-score-layout { display:flex; flex-direction:column; gap:8px; margin-top:0; }
+  .practice-finger-float { position:static; order:1; width:100%; }
+  .practice-score-main { order:2; }
+  .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
+}
+
 @media (orientation:landscape) and (max-height:700px) {
-  .practice-current-panel { top:-10px; margin:-10px 0 8px; padding:10px 0 6px; }
-  .practice-current-panel .practice-finger-guide { display:none; }
+  .practice-current-panel { top:-10px; margin:-10px 0 12px; padding:10px 0 6px; }
+  .practice-finger-float { display:none; }
   .practice-now-summary { min-height:42px; padding:7px 10px; }
   .practice-now-summary strong { font-size:16px; }
   .practice-next-note { font-size:10px; }
+  .practice-current-tools { margin-top:5px; padding-top:5px; gap:4px; }
+  .practice-current-tools .practice-sheet-title span { font-size:9px; }
   .practice-sheet-head { padding:6px 10px; }
   .practice-sheet-title span { font-size:9px; }
   .score-mode-button { min-height:24px; padding:3px 7px; font-size:10px; }
@@ -1602,14 +1626,17 @@ function renderPracticeScore(p) {
   }
 }
 
+function renderScoreModeControls() {
+  const activeMode = state.scoreAnnotationMode || 'compact';
+  return SCORE_ANNOTATION_MODES.map(mode =>
+    `<button class="score-mode-button${mode.id === activeMode ? ' active' : ''}" type="button" aria-pressed="${mode.id === activeMode}" title="${mode.hint}" onclick="setScoreAnnotationMode('${mode.id}')">${mode.label}</button>`
+  ).join('');
+}
+
 function renderPracticeScorePanel(p) {
   if (!p?.sheet?.score) {
     return `<section class="practice-sheet"><div class="score-status">正在生成整曲谱面…</div></section>`;
   }
-  const activeMode = state.scoreAnnotationMode || 'compact';
-  const modeControls = SCORE_ANNOTATION_MODES.map(mode =>
-    `<button class="score-mode-button${mode.id === activeMode ? ' active' : ''}" type="button" aria-pressed="${mode.id === activeMode}" title="${mode.hint}" onclick="setScoreAnnotationMode('${mode.id}')">${mode.label}</button>`
-  ).join('');
   return `
     <section class="practice-sheet lesson-score" aria-label="整曲练习谱面">
       <div class="practice-sheet-head">
@@ -1617,7 +1644,7 @@ function renderPracticeScorePanel(p) {
           <strong>全曲谱面</strong>
           <span>本关 ${p.events.length} 个事件已点亮 · 当前小节放大提示</span>
         </div>
-        <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${modeControls}</div>
+        <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${renderScoreModeControls()}</div>
       </div>
       <div class="score-paper"><div class="score-mount" id="practiceScoreMount"></div></div>
       <div class="practice-score-legend">
@@ -3036,9 +3063,22 @@ function renderPracticeSession() {
           </div>
           ${nextNoteNames ? `<div class="practice-next-note"><span>下一组</span><strong>${escapeHtml(nextNoteNames)}</strong></div>` : ''}
         </div>
-        ${renderPracticeFingerGuide(p, event)}
+        <div class="practice-current-tools">
+          <div class="practice-sheet-title">
+            <strong>全曲谱面</strong>
+            <span>本关 ${p.events.length} 个事件已点亮</span>
+          </div>
+          <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${renderScoreModeControls()}</div>
+        </div>
       </div>
-      ${renderPracticeScorePanel(p)}
+      <div class="practice-score-layout active-score-layout">
+        <aside class="practice-finger-float">
+          ${renderPracticeFingerGuide(p, event)}
+        </aside>
+        <div class="practice-score-main">
+          ${renderPracticeScorePanel(p)}
+        </div>
+      </div>
       ${p.inputMode === 'computer-keyboard' ? renderComputerKeyboard(p, event) : `<div class="practice-input-note">已连接 MIDI：<strong>${escapeHtml(p.midiInputs.map(input => input.name || input.id || '未命名输入').join('、'))}</strong><br>直接开始弹奏。</div>`}
       <div class="practice-stats">
         <div class="practice-stat"><div class="practice-stat-val">${r.currentCombo}</div><div class="practice-stat-lbl">连击</div></div>
