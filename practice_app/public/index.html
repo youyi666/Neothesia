@@ -590,35 +590,7 @@ body { background:var(--bg); }
   .course-card { min-height:108px; padding:12px; }
 }
 
-/* ── Layered score annotations ── */
-.practice-current-panel {
-  position:sticky;
-  top:-24px;
-  z-index:20;
-  width:min(100%,1160px);
-  margin:-24px 0 22px;
-  padding:24px 0 10px;
-  background:var(--bg);
-  border-bottom:1px solid #e2ddec;
-}
-.practice-now-summary {
-  width:100%;
-  min-height:58px;
-  margin:0;
-  padding:10px 14px;
-  border:1px solid #d8ccef;
-  border-left:4px solid var(--primary);
-  border-radius:8px;
-  background:#fff;
-  box-shadow:var(--shadow-sm);
-}
-.practice-now-main { display:flex; align-items:center; gap:10px; min-width:0; }
-.practice-now-label { flex:0 0 auto; color:var(--primary); font-size:11px; font-weight:800; }
-.practice-now-summary strong { color:var(--text); font-size:20px; line-height:1.2; }
-.practice-next-note { margin-left:auto; display:flex; align-items:baseline; gap:6px; color:var(--muted); font-size:11px; white-space:nowrap; }
-.practice-next-note strong { color:#716781; font-size:13px; font-weight:700; }
-.practice-current-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:10px; padding:9px 2px 0; border-top:1px solid #e2ddec; }
-.practice-current-tools .practice-sheet-title span { font-size:10px; }
+/* ── Stable score layout ── */
 .practice-score-layout {
   display:grid;
   grid-template-columns:minmax(168px,190px) minmax(0,1fr);
@@ -627,8 +599,6 @@ body { background:var(--bg); }
   width:min(100%,1160px);
   margin-top:26px;
 }
-.practice-score-layout.active-score-layout { margin-top:0; }
-.active-score-layout .practice-sheet-head { display:none; }
 .practice-finger-float { position:sticky; top:118px; min-width:0; }
 .practice-finger-guide { width:100%; margin:0; }
 .practice-finger-title { margin:0 0 6px 2px; color:var(--muted); font-size:10px; font-weight:800; }
@@ -649,12 +619,6 @@ body { background:var(--bg); }
 .score-mode-button:focus-visible { outline:2px solid #9f84df; outline-offset:1px; }
 
 @media (max-width:720px) {
-  .practice-current-panel { top:-14px; margin:-14px 0 14px; padding:14px 0 8px; }
-  .practice-now-summary { padding:9px 11px; }
-  .practice-now-main { gap:7px; flex-wrap:wrap; }
-  .practice-now-summary strong { font-size:17px; }
-  .practice-next-note { width:100%; margin:2px 0 0; }
-  .practice-current-tools { align-items:stretch; flex-direction:column; gap:7px; margin-top:8px; padding-top:8px; }
   .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
   .practice-finger-card { min-height:60px; padding:7px 8px; }
   .practice-sheet-head { align-items:stretch; }
@@ -670,13 +634,7 @@ body { background:var(--bg); }
 }
 
 @media (orientation:landscape) and (max-height:700px) {
-  .practice-current-panel { top:-10px; margin:-10px 0 12px; padding:10px 0 6px; }
   .practice-finger-float { display:none; }
-  .practice-now-summary { min-height:42px; padding:7px 10px; }
-  .practice-now-summary strong { font-size:16px; }
-  .practice-next-note { font-size:10px; }
-  .practice-current-tools { margin-top:5px; padding-top:5px; gap:4px; }
-  .practice-current-tools .practice-sheet-title span { font-size:9px; }
   .practice-sheet-head { padding:6px 10px; }
   .practice-sheet-title span { font-size:9px; }
   .score-mode-button { min-height:24px; padding:3px 7px; font-size:10px; }
@@ -920,6 +878,7 @@ const WEEK_TASKS = [
 
 const PRACTICE_USERS = ['罗俊生', '李俊'];
 const IDLE_TIMEOUT_MS = 10_000;
+const SCORE_ANNOTATION_STORAGE_KEY = 'piano_score_annotation_mode_v2';
 const SCORE_ANNOTATION_MODES = [
   { id:'compact', label:'简洁', hint:'当前音指法' },
   { id:'names', label:'音名', hint:'目标音名' },
@@ -934,7 +893,7 @@ const state = {
   doneTasks: {},
   openDays: {},
   showNoteNames: true,
-  scoreAnnotationMode: 'compact',
+  scoreAnnotationMode: 'all',
 
   courses: [],
   coursesLoaded: false,
@@ -1036,7 +995,7 @@ function loadState() {
     state.proficiency = p;
     state.doneTasks = t;
     state.showNoteNames = localStorage.getItem('piano_note_names') !== '0';
-    const savedScoreMode = localStorage.getItem('piano_score_annotation_mode');
+    const savedScoreMode = localStorage.getItem(SCORE_ANNOTATION_STORAGE_KEY);
     if (SCORE_ANNOTATION_MODES.some(mode => mode.id === savedScoreMode)) {
       state.scoreAnnotationMode = savedScoreMode;
     }
@@ -1561,7 +1520,7 @@ function practiceLetterName(midi) {
 function practiceScoreAnnotation(note, track, p) {
   const letter = practiceLetterName(note.midi);
   const hand = track.role === 'left' ? 'left' : 'right';
-  const mode = state.scoreAnnotationMode || 'compact';
+  const mode = state.scoreAnnotationMode || 'all';
   const localIndex = p?.sheet?.eventIndexToLocal?.get(note.eventIndex);
   const currentIndex = p?.session?.getEventIndex?.() ?? -1;
   const isTarget = Number.isInteger(localIndex);
@@ -1610,24 +1569,10 @@ function renderPracticeScore(p) {
     noteAnnotationFor:(note, track) => practiceScoreAnnotation(note, track, p),
   }));
 
-  // 只有开始真实评分后才跟随当前音。连接 MIDI / 选择输入方式时，应完整保留说明卡。
-  const shouldFollowCurrentNote = !p.finished && (p.inputMode === 'computer-keyboard' || p.midiStatus === 'connected');
-  if (shouldFollowCurrentNote) {
-    const anchor = document.getElementById('practice-current');
-    if (anchor) {
-      const content = anchor.closest('.content');
-      if (content) {
-        const anchorRect = anchor.getBoundingClientRect();
-        const contentRect = content.getBoundingClientRect();
-        const targetScrollTop = content.scrollTop + (anchorRect.top - contentRect.top) - contentRect.height * 0.35;
-        content.scrollTop = Math.max(0, targetScrollTop);
-      }
-    }
-  }
 }
 
 function renderScoreModeControls() {
-  const activeMode = state.scoreAnnotationMode || 'compact';
+  const activeMode = state.scoreAnnotationMode || 'all';
   return SCORE_ANNOTATION_MODES.map(mode =>
     `<button class="score-mode-button${mode.id === activeMode ? ' active' : ''}" type="button" aria-pressed="${mode.id === activeMode}" title="${mode.hint}" onclick="setScoreAnnotationMode('${mode.id}')">${mode.label}</button>`
   ).join('');
@@ -1948,7 +1893,7 @@ function toggleNoteNames() {
 function setScoreAnnotationMode(mode) {
   if (!SCORE_ANNOTATION_MODES.some(item => item.id === mode)) return;
   state.scoreAnnotationMode = mode;
-  localStorage.setItem('piano_score_annotation_mode', mode);
+  localStorage.setItem(SCORE_ANNOTATION_STORAGE_KEY, mode);
   if (state.view === 'practice-session') render();
   else renderActiveScore();
 }
@@ -3033,11 +2978,6 @@ function renderPracticeSession() {
     else if (i === p.session.getEventIndex()) cls += ' current';
     return `<span class="${cls}"></span>`;
   }).join('');
-  const noteNames = event.notes.map(n => midiNoteName(n.note)).join(' · ');
-  const nextEvent = p.events[p.session.getEventIndex() + 1];
-  const nextNoteNames = nextEvent ? nextEvent.notes.map(n => midiNoteName(n.note)).join(' · ') : '';
-  const hands = [...new Set(event.notes.map(n => n.hand))];
-  const handLabel = hands.length > 1 ? '双手' : (HAND_LABEL[hands[0]] || '');
   const runProgress = practiceRunProgress(p);
 
   return `
@@ -3054,24 +2994,7 @@ function renderPracticeSession() {
           ? `<div class="practice-timer-live">⏱ ${escapeHtml(state.currentUser)} · ${formatPracticeTime(Math.floor((Date.now() - state.practiceTimer.startTime) / 1000))}</div>`
           : ''}
       </div>
-      <div class="practice-current-panel">
-        <div class="practice-now-summary">
-          <div class="practice-now-main">
-            <span class="practice-now-label">当前音符</span>
-            <strong>${escapeHtml(noteNames)}</strong>
-            <span class="lesson-badge badge-hand-${hands.length>1?'both':hands[0]}">${handLabel}</span>
-          </div>
-          ${nextNoteNames ? `<div class="practice-next-note"><span>下一组</span><strong>${escapeHtml(nextNoteNames)}</strong></div>` : ''}
-        </div>
-        <div class="practice-current-tools">
-          <div class="practice-sheet-title">
-            <strong>全曲谱面</strong>
-            <span>本关 ${p.events.length} 个事件已点亮</span>
-          </div>
-          <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${renderScoreModeControls()}</div>
-        </div>
-      </div>
-      <div class="practice-score-layout active-score-layout">
+      <div class="practice-score-layout">
         <aside class="practice-finger-float">
           ${renderPracticeFingerGuide(p, event)}
         </aside>
