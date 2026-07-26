@@ -589,6 +589,74 @@ body { background:var(--bg); }
   .course-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .course-card { min-height:108px; padding:12px; }
 }
+
+/* ── Layered score annotations ── */
+.practice-current-panel {
+  position:sticky;
+  top:-24px;
+  z-index:20;
+  width:min(100%,980px);
+  margin:-24px 0 12px;
+  padding:24px 0 10px;
+  background:var(--bg);
+  border-bottom:1px solid #e2ddec;
+}
+.practice-now-summary {
+  width:100%;
+  min-height:58px;
+  margin:0;
+  padding:10px 14px;
+  border:1px solid #d8ccef;
+  border-left:4px solid var(--primary);
+  border-radius:8px;
+  background:#fff;
+  box-shadow:var(--shadow-sm);
+}
+.practice-now-main { display:flex; align-items:center; gap:10px; min-width:0; }
+.practice-now-label { flex:0 0 auto; color:var(--primary); font-size:11px; font-weight:800; }
+.practice-now-summary strong { color:var(--text); font-size:20px; line-height:1.2; }
+.practice-next-note { margin-left:auto; display:flex; align-items:baseline; gap:6px; color:var(--muted); font-size:11px; white-space:nowrap; }
+.practice-next-note strong { color:#716781; font-size:13px; font-weight:700; }
+.practice-finger-guide { width:100%; margin:8px 0 0; }
+.practice-finger-title { margin:0 0 6px 2px; color:var(--muted); font-size:10px; font-weight:800; }
+.practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:7px; }
+.practice-finger-card { min-height:64px; padding:8px 10px; border-radius:7px; background:#fff; }
+.practice-finger-note { font-size:16px; }
+.practice-finger-detail { margin-top:3px; font-size:11px; }
+.practice-finger-key { margin-top:2px; font-size:10px; }
+.practice-sheet { width:min(100%,980px); }
+.practice-sheet-head { align-items:center; padding:10px 14px; }
+.practice-sheet-title { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.practice-sheet-title strong { font-size:14px; }
+.practice-sheet-title span { max-width:none; text-align:left; }
+.score-mode-switch { display:flex; flex:0 0 auto; gap:3px; padding:3px; border:1px solid var(--border); border-radius:7px; background:#f7f5fa; }
+.score-mode-button { min-height:28px; padding:4px 9px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:inherit; font-size:11px; font-weight:750; cursor:pointer; }
+.score-mode-button.active { color:#fff; background:var(--primary); box-shadow:0 2px 5px rgba(98,67,189,.18); }
+.score-mode-button:focus-visible { outline:2px solid #9f84df; outline-offset:1px; }
+
+@media (max-width:720px) {
+  .practice-current-panel { top:-14px; margin:-14px 0 10px; padding:14px 0 8px; }
+  .practice-now-summary { padding:9px 11px; }
+  .practice-now-main { gap:7px; flex-wrap:wrap; }
+  .practice-now-summary strong { font-size:17px; }
+  .practice-next-note { width:100%; margin:2px 0 0; }
+  .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
+  .practice-finger-card { min-height:60px; padding:7px 8px; }
+  .practice-sheet-head { align-items:stretch; }
+  .score-mode-switch { width:100%; }
+  .score-mode-button { flex:1; padding-left:4px; padding-right:4px; }
+}
+
+@media (orientation:landscape) and (max-height:700px) {
+  .practice-current-panel { top:-10px; margin:-10px 0 8px; padding:10px 0 6px; }
+  .practice-current-panel .practice-finger-guide { display:none; }
+  .practice-now-summary { min-height:42px; padding:7px 10px; }
+  .practice-now-summary strong { font-size:16px; }
+  .practice-next-note { font-size:10px; }
+  .practice-sheet-head { padding:6px 10px; }
+  .practice-sheet-title span { font-size:9px; }
+  .score-mode-button { min-height:24px; padding:3px 7px; font-size:10px; }
+}
 </style>
 </head>
 <body>
@@ -828,6 +896,12 @@ const WEEK_TASKS = [
 
 const PRACTICE_USERS = ['罗俊生', '李俊'];
 const IDLE_TIMEOUT_MS = 10_000;
+const SCORE_ANNOTATION_MODES = [
+  { id:'compact', label:'简洁', hint:'当前音指法' },
+  { id:'names', label:'音名', hint:'目标音名' },
+  { id:'fingering', label:'指法', hint:'目标指法' },
+  { id:'all', label:'全标注', hint:'音名与指法' },
+];
 
 const state = {
   view: 'courses',    // 'songs' | 'detail' | 'tasks' | 'courses' | 'import' | 'course-detail'
@@ -836,6 +910,7 @@ const state = {
   doneTasks: {},
   openDays: {},
   showNoteNames: true,
+  scoreAnnotationMode: 'compact',
 
   courses: [],
   coursesLoaded: false,
@@ -937,6 +1012,10 @@ function loadState() {
     state.proficiency = p;
     state.doneTasks = t;
     state.showNoteNames = localStorage.getItem('piano_note_names') !== '0';
+    const savedScoreMode = localStorage.getItem('piano_score_annotation_mode');
+    if (SCORE_ANNOTATION_MODES.some(mode => mode.id === savedScoreMode)) {
+      state.scoreAnnotationMode = savedScoreMode;
+    }
     // seed defaults
     for (const s of SONGS) {
       if (state.proficiency[s.id] === undefined) {
@@ -1130,7 +1209,7 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
     }, midiName(note.midi)));
   }
 
-  if (annotation?.letter) {
+  if (annotation?.letter && annotation.showLetter !== false) {
     // 和弦时彩色音名标签同样按 stackIndex 向下错开
     svg.appendChild(svgEl('text', {
       x, y:staffTop + 76 + stackIndex * 14, 'text-anchor':'middle', 'font-size':11,
@@ -1139,7 +1218,9 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
   }
 
   // 指法数字样式统一：只要显示就带框（曲目库预览与练习评分页一致），不再区分来源。
-  const displayedFinger = annotation?.finger ?? fingerNum;
+  const displayedFinger = annotation?.showFinger === false
+    ? null
+    : (annotation?.finger ?? fingerNum);
   if (displayedFinger) {
     const fy = clef === 'treble'
       ? (stemUp ? y - 38 : y - 16)
@@ -1451,39 +1532,44 @@ function practiceLetterName(midi) {
   return `${PITCH_NAMES[((midi % 12) + 12) % 12]}${octave}`;
 }
 
-// 指法标注样式统一：只要显示指法数字（或"换"），一律带框；不再区分"本关目标/前后参考"。
-// 优先级：人工标注的 FINGERING 表（覆盖整条曲子）> 本关范围内的自动推算（suggestedFinger，
-// 以本关第一个音为锚点，只在本关范围内可靠 —— 离锚点越远的音，自动推算越不准，所以本关范围外
-// 没有人工标注时不显示，避免给出误导性的指法建议）。
+// 先计算可靠的目标指法，再按当前标注模式决定显示多少信息。
+// 非本关音符始终保持纯净的灰色谱面，避免长曲目被辅助文字铺满。
 function practiceScoreAnnotation(note, track, p) {
   const letter = practiceLetterName(note.midi);
   const hand = track.role === 'left' ? 'left' : 'right';
+  const mode = state.scoreAnnotationMode || 'compact';
+  const localIndex = p?.sheet?.eventIndexToLocal?.get(note.eventIndex);
+  const currentIndex = p?.session?.getEventIndex?.() ?? -1;
+  const isTarget = Number.isInteger(localIndex);
 
   // 手动 FINGERING 表（按音符在轨道中的顺序索引）；专项特训的指法来自 /api/drills（见 state.drillFingering）
   const fd = (FINGERING_BY_COURSE[p?.courseId] || FINGERING[SONGS.find(s => s.id === p?.courseId)?.midi || ''] || state.drillFingering[p?.courseId])?.[hand];
   const noteIdx = fd ? track.notes.findIndex(n => n.start === note.start && n.midi === note.midi) : -1;
   const explicitFinger = (noteIdx >= 0 && fd) ? fd[noteIdx] : null;
 
-  if (explicitFinger != null) {
-    return { letter, finger: explicitFinger, boxedFinger: true };
+  let fingerNumber = explicitFinger;
+  if (fingerNumber == null && isTarget) {
+    const eventNote = p.events?.[localIndex]?.notes?.find(candidate => candidate.hand === hand && candidate.note === note.midi);
+    if (eventNote?.finger != null) {
+      fingerNumber = eventNote.finger;
+    } else if (eventNote) {
+      // 降级兜底：只对本关目标音使用自动推算，避免把远处参考音误导成确定指法。
+      const finger = suggestedFinger(eventNote, p);
+      fingerNumber = finger.number || null;
+    }
   }
 
-  const localIndex = p?.sheet?.eventIndexToLocal?.get(note.eventIndex);
-  if (!Number.isInteger(localIndex)) return { letter };
+  if (!isTarget) return null;
 
-  const eventNote = p.events?.[localIndex]?.notes?.find(candidate => candidate.hand === hand && candidate.note === note.midi);
-  if (!eventNote) return { letter };
+  if (mode === 'names') return { letter, showFinger:false };
+  if (mode === 'fingering') return { finger:fingerNumber, showLetter:false };
+  if (mode === 'all') return { letter, finger:fingerNumber };
 
-  // Viterbi 引擎（fingering-engine.js）在服务端预算并注入了 finger 字段，优先使用。
-  if (eventNote.finger != null) {
-    return { letter, finger: eventNote.finger, boxedFinger: true };
-  }
-
-  // 降级兜底：suggestedFinger 基于固定锚点，对音域较宽的曲子容易误判为"换"；
-  // 只在算出明确 1-5 指时才显示，避免刷屏式误导。
-  const finger = suggestedFinger(eventNote, p);
-  if (finger.number == null) return { letter };
-  return { letter, finger: finger.number, boxedFinger: true };
+  // 简洁模式只给当前事件完整提示，下一组目标保留音名作为阅读线索。
+  const distance = Number.isInteger(currentIndex) ? localIndex - currentIndex : 0;
+  if (distance === 0) return { letter, finger:fingerNumber };
+  if (distance === 1) return { letter, showFinger:false };
+  return null;
 }
 
 function renderPracticeScore(p) {
@@ -1520,15 +1606,22 @@ function renderPracticeScorePanel(p) {
   if (!p?.sheet?.score) {
     return `<section class="practice-sheet"><div class="score-status">正在生成整曲谱面…</div></section>`;
   }
+  const activeMode = state.scoreAnnotationMode || 'compact';
+  const modeControls = SCORE_ANNOTATION_MODES.map(mode =>
+    `<button class="score-mode-button${mode.id === activeMode ? ' active' : ''}" type="button" aria-pressed="${mode.id === activeMode}" title="${mode.hint}" onclick="setScoreAnnotationMode('${mode.id}')">${mode.label}</button>`
+  ).join('');
   return `
     <section class="practice-sheet lesson-score" aria-label="整曲练习谱面">
       <div class="practice-sheet-head">
-        <strong>课堂练习谱</strong>
-        <span>上方五线谱 · 下方 C D E F G A B · 本关 ${p.events.length} 个事件已点亮</span>
+        <div class="practice-sheet-title">
+          <strong>全曲谱面</strong>
+          <span>本关 ${p.events.length} 个事件已点亮 · 当前小节放大提示</span>
+        </div>
+        <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${modeControls}</div>
       </div>
       <div class="score-paper"><div class="score-mount" id="practiceScoreMount"></div></div>
       <div class="practice-score-legend">
-        <span><i></i>非本关</span><span><i class="target"></i>本关目标</span><span><i class="current"></i>当前事件</span><span><i class="pointer"></i>现在弹这里</span><span><i class="done"></i>已完成</span>
+        <span><i></i>未练习</span><span><i class="target"></i>本关目标</span><span><i class="current"></i>当前音</span><span><i class="done"></i>已完成</span>
       </div>
     </section>`;
 }
@@ -1823,6 +1916,14 @@ function toggleNoteNames() {
   const button = document.querySelector('.note-toggle');
   if (button) button.textContent = state.showNoteNames ? '隐藏音名' : '显示音名';
   renderActiveScore();
+}
+
+function setScoreAnnotationMode(mode) {
+  if (!SCORE_ANNOTATION_MODES.some(item => item.id === mode)) return;
+  state.scoreAnnotationMode = mode;
+  localStorage.setItem('piano_score_annotation_mode', mode);
+  if (state.view === 'practice-session') render();
+  else renderActiveScore();
 }
 
 function toggleLandscapeProf() {
@@ -2906,6 +3007,8 @@ function renderPracticeSession() {
     return `<span class="${cls}"></span>`;
   }).join('');
   const noteNames = event.notes.map(n => midiNoteName(n.note)).join(' · ');
+  const nextEvent = p.events[p.session.getEventIndex() + 1];
+  const nextNoteNames = nextEvent ? nextEvent.notes.map(n => midiNoteName(n.note)).join(' · ') : '';
   const hands = [...new Set(event.notes.map(n => n.hand))];
   const handLabel = hands.length > 1 ? '双手' : (HAND_LABEL[hands[0]] || '');
   const runProgress = practiceRunProgress(p);
@@ -2924,13 +3027,18 @@ function renderPracticeSession() {
           ? `<div class="practice-timer-live">⏱ ${escapeHtml(state.currentUser)} · ${formatPracticeTime(Math.floor((Date.now() - state.practiceTimer.startTime) / 1000))}</div>`
           : ''}
       </div>
-      ${renderPracticeScorePanel(p)}
-      <div class="practice-now-summary">
-        <span class="practice-now-label">当前要弹</span>
-        <strong>${escapeHtml(noteNames)}</strong>
-        <span class="lesson-badge badge-hand-${hands.length>1?'both':hands[0]}">${handLabel}</span>
+      <div class="practice-current-panel">
+        <div class="practice-now-summary">
+          <div class="practice-now-main">
+            <span class="practice-now-label">当前音符</span>
+            <strong>${escapeHtml(noteNames)}</strong>
+            <span class="lesson-badge badge-hand-${hands.length>1?'both':hands[0]}">${handLabel}</span>
+          </div>
+          ${nextNoteNames ? `<div class="practice-next-note"><span>下一组</span><strong>${escapeHtml(nextNoteNames)}</strong></div>` : ''}
+        </div>
+        ${renderPracticeFingerGuide(p, event)}
       </div>
-      ${renderPracticeFingerGuide(p, event)}
+      ${renderPracticeScorePanel(p)}
       ${p.inputMode === 'computer-keyboard' ? renderComputerKeyboard(p, event) : `<div class="practice-input-note">已连接 MIDI：<strong>${escapeHtml(p.midiInputs.map(input => input.name || input.id || '未命名输入').join('、'))}</strong><br>直接开始弹奏。</div>`}
       <div class="practice-stats">
         <div class="practice-stat"><div class="practice-stat-val">${r.currentCombo}</div><div class="practice-stat-lbl">连击</div></div>
