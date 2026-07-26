@@ -768,6 +768,12 @@ const SEED_SONGS = [
 
   // 用户实际在练的曲子：从原速全曲自动切出渐进关卡（阶段C会随小节数自动扩展）。
   { id: 'qinghuaci', title: '青花瓷', midi: '05_qinghuaci/04_原速_107bpm.mid' },
+
+  // Mutopia 公版精选：保留原曲完整结构，适合作为入门后的分段挑战。
+  { id: 'bach_prelude_c', title: '巴赫：C大调前奏曲 BWV 846', midi: '07_public_domain_classics/bach_prelude_c_bwv846.mid' },
+  { id: 'fur_elise', title: '贝多芬：致爱丽丝', midi: '07_public_domain_classics/beethoven_fur_elise.mid' },
+  { id: 'chopin_prelude_28_20', title: '肖邦：前奏曲 Op. 28 No. 20', midi: '07_public_domain_classics/chopin_prelude_op28_no20.mid' },
+  { id: 'schubert_ungarische', title: '舒伯特：匈牙利旋律 D.817', midi: '07_public_domain_classics/schubert_ungarische_melodie.mid' },
 ];
 
 function curriculumRank(courseId) {
