@@ -897,7 +897,6 @@ const state = {
 
   courses: [],
   coursesLoaded: false,
-  drillFingering: {}, // 专项特训指法表：courseId -> {right:[...]}，来自 /api/drills
   drillFilter: 'all',
   settings: {},
   activeCourseId: null,
@@ -1016,47 +1015,6 @@ function saveProf() {
 function saveTasks() {
   localStorage.setItem('piano_tasks', JSON.stringify(state.doneTasks));
 }
-
-// ═══════════════════════════════════════
-//  FINGERING DATA  (手动核对，黑键不用1/5指)
-// ═══════════════════════════════════════
-
-const FINGERING = {
-  // 卡农片段（简易循环）右手 22音
-  // F#4(3) E4(2) D4(1) | C#4(3) B3(2) A3(1) B3(2) C#4(3)
-  // D4(4) C#4(3) B3(2) A3(1) | G3(3) F#3(2) G3(3) A3(4)
-  // D4(1) E4(2) F#4(3) A4(4) B4(5) A4(4)
-  '02_two_hands_easy/04_pachelbel_canon_easy_loop.mid': {
-    right: [3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4],
-  },
-
-  // 卡农双手慢速：右手同上弹两遍(44音)，左手16音
-  // 左手：D3(1) A2(5) B2(4) F#2(3) G2(2) D2(5) G2(2) A2(1) × 2
-  // 黑键 F#2 用 3(中指)，D2 白键用 5(小指)，无拇指/小指按黑键
-  '04_challenge/02_canon_in_d_slow_two_hands.mid': {
-    right: [3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4,
-            3,2,1,3,2,1,2,3, 4,3,2,1,3,2,3,4, 1,2,3,4,5,4],
-    left:  [1,5,4,3,2,5,2,1, 1,5,4,3,2,5,2,1],
-  },
-
-  // 奇异恩典双手简易：右手18音，左手8音（全白键，C大调）
-  // 右手两个把位：把位A G3-D4(G3=5,A3=4,C4=2,D4=1)，把位B C4-G4(C4=1,D4=2,E4=3,G4=5)
-  // 第1段：G3(5)[A] C4(2)[A] | 换→E4(3)[B] C4(1)[B] E4(3)[B] | 换→D4(1)[A] C4(2)[A] A3(4)[A] G3(5)[A]
-  // 第2段：G3(5)[A] C4(2)[A] | 换→E4(3)[B] C4(1)[B] E4(3)[B] | 换→D4(1)[A] E4(3)[B] G4(5)[B] C4(1)[B]
-  // 下行须整体保持把位A：D4(1)→C4(2)→A3(4)→G3(5) 全在A位，不得混用B位（否则C4(1)下接A3(4)物理不可达）
-  // 左手：C3(1) F2(5) C3(1) G2(5) × 2
-  '02_two_hands_easy/03_amazing_grace_two_hands_easy.mid': {
-    right: [5,2,3,1,3,1,2,4,5, 5,2,3,1,3,1,3,5,1],
-    left:  [1,5,1,5, 1,5,1,5],
-  },
-};
-
-// DB courseId → FINGERING 别名映射（DB id 与 midi 文件名不同时用此表）
-const FINGERING_BY_COURSE = {
-  'canon_easy':    FINGERING['02_two_hands_easy/04_pachelbel_canon_easy_loop.mid'],
-  'canon_slow':    FINGERING['04_challenge/02_canon_in_d_slow_two_hands.mid'],
-  'amazing_grace': FINGERING['02_two_hands_easy/03_amazing_grace_two_hands_easy.mid'],
-};
 
 // ═══════════════════════════════════════
 //  RENDER HELPERS
@@ -1337,7 +1295,7 @@ function drawStaff(svg, options) {
   let stackIndex = 0;
   for (const note of track.notes) {
     if (note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001) {
-      const fingerNum = fingering ? fingering[noteIdx] : null;
+      const fingerNum = fingering ? fingering[noteIdx] : (note.finger ?? null);
       const tone = noteToneFor ? noteToneFor(note) : 'default';
       const annotation = noteAnnotationFor ? noteAnnotationFor(note, track) : null;
       const x = xForBeat(note.start);
@@ -1352,8 +1310,6 @@ function drawStaff(svg, options) {
 }
 
 function buildStaffSvg(score, width, showNames, options = {}) {
-  const midiPath = state.activeSong?.midi || '';
-  const fingeringData = FINGERING[midiPath] || {};
   const lessonMode = options.lessonMode === true;
   const right = score.tracks.find(track => track.role === 'right') || score.tracks[0];
   const left = score.tracks.find(track => track.role === 'left');
@@ -1454,12 +1410,10 @@ function buildStaffSvg(score, width, showNames, options = {}) {
 
     drawStaff(svg, {
       ...common, track:right, rests:rightRests, clef:'treble', staffTop:trebleTop,
-      fingering: fingeringData.right || null,
     });
     if (left) {
       drawStaff(svg, {
         ...common, track:left, rests:leftRests, clef:'bass', staffTop:bassTop,
-        fingering: fingeringData.left || null,
       });
     }
     if (pointerX != null) {
@@ -1533,20 +1487,11 @@ function practiceScoreAnnotation(note, track, p) {
   const currentIndex = p?.session?.getEventIndex?.() ?? -1;
   const isTarget = Number.isInteger(localIndex);
 
-  // 手动 FINGERING 表（按音符在轨道中的顺序索引）；专项特训的指法来自 /api/drills（见 state.drillFingering）
-  const fd = (FINGERING_BY_COURSE[p?.courseId] || FINGERING[SONGS.find(s => s.id === p?.courseId)?.midi || ''] || state.drillFingering[p?.courseId])?.[hand];
-  const noteIdx = fd ? track.notes.findIndex(n => n.start === note.start && n.midi === note.midi) : -1;
-  const explicitFinger = (noteIdx >= 0 && fd) ? fd[noteIdx] : null;
-
-  let fingerNumber = explicitFinger;
-  if (fingerNumber == null && isTarget) {
+  let fingerNumber = note.finger ?? null;
+  if (isTarget) {
     const eventNote = p.events?.[localIndex]?.notes?.find(candidate => candidate.hand === hand && candidate.note === note.midi);
     if (eventNote?.finger != null) {
       fingerNumber = eventNote.finger;
-    } else if (eventNote) {
-      // 降级兜底：只对本关目标音使用自动推算，避免把远处参考音误导成确定指法。
-      const finger = suggestedFinger(eventNote, p);
-      fingerNumber = finger.number || null;
     }
   }
 
@@ -1986,19 +1931,14 @@ async function apiPost(path, body) {
 async function loadCourses() {
   state.coursesLoaded = true;
   try {
-    const [courseResult, settingsResult, drillsResult, timeResult] = await Promise.allSettled([
+    const [courseResult, settingsResult, timeResult] = await Promise.allSettled([
       apiGet('/api/courses?user=' + encodeURIComponent(state.currentUser)),
       apiGet('/api/settings'),
-      apiGet('/api/drills'),
       apiGet('/api/practice-time'),
     ]);
     if (courseResult.status !== 'fulfilled') throw courseResult.reason;
     state.courses = courseResult.value.courses;
     if (settingsResult.status === 'fulfilled') state.settings = settingsResult.value || {};
-    if (drillsResult.status === 'fulfilled') {
-      state.drillFingering = {};
-      for (const d of drillsResult.value.drills || []) state.drillFingering[d.id] = d.fingering;
-    }
     if (timeResult.status === 'fulfilled') {
       for (const user of PRACTICE_USERS) {
         state.practiceTimeStats[user] = timeResult.value.users?.[user] || 0;
@@ -2541,41 +2481,15 @@ function midiNoteName(n) {
 const FINGER_NAMES = { 1: '拇指', 2: '食指', 3: '中指', 4: '无名指', 5: '小指' };
 const REQUIRED_RUNS_BY_STAGE = { A: 2, B: 3, C: 4, manual: 3 };
 
-function diatonicStep(midi) {
-  const pitchClass = ((midi % 12) + 12) % 12;
-  return Math.floor(midi / 12) * 7 + DIATONIC_CLASS[pitchClass];
-}
-
-function inferFingerStarts(events) {
-  const starts = {};
-  for (const event of events || []) {
-    for (const note of event.notes || []) {
-      if (!note.hand || starts[note.hand] != null) continue;
-      starts[note.hand] = diatonicStep(note.note);
-    }
-  }
-  return starts;
-}
-
-function suggestedFinger(note, p) {
-  const start = p?.fingerStarts?.[note.hand];
-  if (!Number.isFinite(start)) return { number: null, needsShift: false };
-  const distance = diatonicStep(note.note) - start;
-  const raw = note.hand === 'left' ? 5 - distance : 1 + distance;
-  if (raw < 1 || raw > 5) return { number: null, needsShift: true };
-  return { number: raw, needsShift: false };
-}
-
 function renderPracticeFingerGuide(p, event) {
   const cards = event.notes.map(note => {
     const hand = HAND_LABEL[note.hand] || note.hand || '本手';
-    const finger = suggestedFinger(note, p);
     const keyboardKey = p.inputMode === 'computer-keyboard'
       ? COMPUTER_KEYBOARD_LAYOUT.find(key => p.keyboardBaseNote + key.semitone === note.note)
       : null;
-    const fingerText = finger.needsShift
-      ? '建议换手位'
-      : finger.number ? `第 ${finger.number} 指（${FINGER_NAMES[finger.number]}）` : '按这个琴键';
+    const fingerText = note.finger
+      ? `第 ${note.finger} 指（${FINGER_NAMES[note.finger]}）`
+      : '按这个琴键';
     const keyText = keyboardKey
       ? `电脑键盘：<kbd>${keyboardKey.label}</kbd>`
       : `钢琴键：${midiNoteName(note.note)}`;
@@ -2628,7 +2542,7 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
     courseId, lessonId, lesson: null, events: null, sheet: null,
     midiStatus: 'idle', midiInputs: [], midiAccess: null, midiStateTimer: null, inputMode,
     keyboardBaseNote: 60, keyboardPressedCodes: new Set(),
-    fingerStarts: {}, session: null, result: null, finished: null, finishing: false, loadError: '',
+    session: null, result: null, finished: null, finishing: false, loadError: '',
     countdownTimer: null, countdownInterval: null, countdownSeconds: null,
   };
   state.view = 'practice-session';
@@ -2643,7 +2557,6 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
     state.practice.events = practiceData.events;
     state.practice.sheet = practiceData.sheet;
     state.practice.sheet.eventIndexToLocal = new Map(practiceData.sheet.targetEventIndexes.map((index, localIndex) => [index, localIndex]));
-    state.practice.fingerStarts = inferFingerStarts(practiceData.events);
     state.practice.session = PracticeScoring.createWaitModeSession(practiceData.events);
     state.practice.result = state.practice.session.getResult();
     render();
