@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { predictFingeringForEvents } = require('./lib/fingering-engine.js');
 
 function readVarLength(buffer, start) {
   let value = 0;
@@ -15,6 +16,32 @@ function readVarLength(buffer, start) {
 
 function roundBeat(value) {
   return Math.round(value * 1000000) / 1000000;
+}
+
+function annotateTrackFingering(track, ticksPerQuarter) {
+  const byStart = new Map();
+  for (const note of track.notes) {
+    const tick = Math.round(note.start * ticksPerQuarter);
+    if (!byStart.has(tick)) {
+      byStart.set(tick, { tick, endTick: tick, notes: [] });
+    }
+    const event = byStart.get(tick);
+    event.endTick = Math.max(
+      event.endTick,
+      Math.round((note.start + note.duration) * ticksPerQuarter),
+    );
+    event.notes.push(note);
+  }
+  const events = [...byStart.values()]
+    .sort((a, b) => a.tick - b.tick)
+    .map(event => ({
+      ...event,
+      notes: event.notes.sort((a, b) => a.midi - b.midi),
+    }));
+  predictFingeringForEvents(events, track.role, {
+    ticksPerQuarter,
+    source: 'generated',
+  });
 }
 
 function parseMidi(file) {
@@ -110,12 +137,14 @@ function parseMidi(file) {
         if (starts?.length) {
           const started = starts.shift();
           if (!starts.length) active.delete(key);
-          notes.push({
-            midi: data1,
-            start: roundBeat(started.tick / ticksPerQuarter),
-            duration: roundBeat((tick - started.tick) / ticksPerQuarter),
-            velocity: started.velocity,
-          });
+          if (tick > started.tick) {
+            notes.push({
+              midi: data1,
+              start: roundBeat(started.tick / ticksPerQuarter),
+              duration: roundBeat((tick - started.tick) / ticksPerQuarter),
+              velocity: started.velocity,
+            });
+          }
         }
       }
     }
@@ -128,6 +157,8 @@ function parseMidi(file) {
       tracks.push({ name: trackName || `Track ${trackIndex}`, role, notes });
     }
   }
+
+  for (const track of tracks) annotateTrackFingering(track, ticksPerQuarter);
 
   const totalBeats = tracks.reduce((max, track) => {
     return Math.max(max, ...track.notes.map(note => note.start + note.duration));

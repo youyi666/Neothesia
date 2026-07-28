@@ -23,13 +23,17 @@ function extractTrackNotes(events) {
       if (stack && stack.length) {
         const started = stack.shift();
         if (!stack.length) active.delete(key);
-        notes.push({
-          note: event.note,
-          channel: event.channel,
-          tick: started.tick,
-          endTick: event.tick,
-          velocity: started.velocity,
-        });
+        // 某些 MIDI 会在同一 tick 写入重叠 note-on/note-off，形成 0 时长的
+        // “幽灵音符”。钢琴上无法演奏，也会让同一个琴键被错误分配两根手指。
+        if (event.tick > started.tick) {
+          notes.push({
+            note: event.note,
+            channel: event.channel,
+            tick: started.tick,
+            endTick: event.tick,
+            velocity: started.velocity,
+          });
+        }
       }
     }
   }

@@ -35,6 +35,10 @@ const APP_BUILD_ID = getBackendBuildId(BACKEND_BUILD_FILES);
 const APP_STARTED_AT = new Date().toISOString();
 const scoreResult = loadScoreLibrary(MIDI_ROOT);
 const SCORE_JSON = Buffer.from(JSON.stringify(scoreResult.library), 'utf8');
+const DRILL_MANIFEST = store.loadDrillManifest(MIDI_ROOT);
+const DRILL_FINGERING_BY_ID = new Map(
+  DRILL_MANIFEST.map(drill => [drill.id, drill.fingering]),
+);
 const seedResults = store.seedDefaultCourses(MIDI_ROOT);
 
 const MIME = {
@@ -152,7 +156,7 @@ async function handleApi(req, res, requestPath, url) {
     return true;
   }
   if (requestPath === '/api/drills' && req.method === 'GET') {
-    sendJson(res, 200, { drills: store.loadDrillManifest(MIDI_ROOT) });
+    sendJson(res, 200, { drills: DRILL_MANIFEST });
     return true;
   }
   if (requestPath === '/api/courses' && req.method === 'POST') {
@@ -204,16 +208,23 @@ async function handleApi(req, res, requestPath, url) {
 
   const eventsMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/events$/);
   if (eventsMatch && req.method === 'GET') {
-    const events = store.getLessonEvents(decodeURIComponent(eventsMatch[1]), decodeURIComponent(eventsMatch[2]));
+    const courseId = decodeURIComponent(eventsMatch[1]);
+    const events = store.getLessonEvents(
+      courseId,
+      decodeURIComponent(eventsMatch[2]),
+      { explicitFingering: DRILL_FINGERING_BY_ID.get(courseId) },
+    );
     sendJson(res, 200, { events });
     return true;
   }
 
   const practiceDataMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/practice-data$/);
   if (practiceDataMatch && req.method === 'GET') {
+    const courseId = decodeURIComponent(practiceDataMatch[1]);
     const data = store.getLessonPracticeData(
-      decodeURIComponent(practiceDataMatch[1]),
+      courseId,
       decodeURIComponent(practiceDataMatch[2]),
+      { explicitFingering: DRILL_FINGERING_BY_ID.get(courseId) },
     );
     sendJson(res, 200, data);
     return true;

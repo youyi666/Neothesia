@@ -85,6 +85,38 @@ test('getLessonPracticeData returns the full score and marks the active lesson e
   const markedIndexes = data.sheet.score.tracks.flatMap(track => track.notes.map(note => note.eventIndex)).filter(Number.isInteger);
   assert.ok(markedIndexes.length > 0);
   assert.ok(markedIndexes.every(index => data.sheet.targetEventIndexes.includes(index)));
+  assert.ok(data.events.every(event =>
+    event.notes.every(note => Number.isInteger(note.finger) && note.finger >= 1 && note.finger <= 5)));
+  assert.ok(data.sheet.score.tracks.every(track =>
+    track.notes.every(note => Number.isInteger(note.finger) && note.finger >= 1 && note.finger <= 5)));
+});
+
+test('overlapping lessons reuse the same whole-song fingering and score guidance', () => {
+  const course = store.loadCourse(TEST_COURSE_ID);
+  const shortLesson = course.lessons.find(l =>
+    l.hand_mode === 'right' && l.range_type === 'event' && l.end_event === 4);
+  const longLesson = course.lessons.find(l =>
+    l.hand_mode === 'right' && l.range_type === 'event' && l.end_event === 8);
+  const shortData = store.getLessonPracticeData(TEST_COURSE_ID, shortLesson.lesson_id);
+  const longData = store.getLessonPracticeData(TEST_COURSE_ID, longLesson.lesson_id);
+
+  const longFingers = new Map(longData.events.flatMap(event =>
+    event.notes.map(note => [`${event.tick}:${note.hand}:${note.note}`, note.finger])));
+  for (const event of shortData.events) {
+    const globalEventIndex = shortData.sheet.targetEventIndexes[event.index];
+    for (const note of event.notes) {
+      assert.equal(
+        note.finger,
+        longFingers.get(`${event.tick}:${note.hand}:${note.note}`),
+        '同一音符在短课节和长课节中必须使用相同指法',
+      );
+      const scoreNote = shortData.sheet.score.tracks
+        .find(track => track.role === note.hand)
+        .notes.find(candidate =>
+          candidate.eventIndex === globalEventIndex && candidate.midi === note.note);
+      assert.equal(scoreNote?.finger, note.finger, '谱面和当前音卡片必须读取同一个指法');
+    }
+  }
 });
 
 test('playing a lesson perfectly twice records cumulative success before it unlocks the next lesson', () => {

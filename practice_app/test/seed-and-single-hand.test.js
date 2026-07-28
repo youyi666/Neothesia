@@ -10,7 +10,7 @@ const store = require('../lib/course-store.js');
 const MIDI_ROOT = path.join(__dirname, '..', '..', 'practice_midis');
 const SINGLE_HAND_MIDI = path.join(MIDI_ROOT, '01_single_hand', '04_frere_jacques_right_hand_slow.mid');
 
-function buildLongSongMidi(measureCount) {
+function buildLongSongMidi(measureCount, leftStartMeasure = 0) {
   const tpq = 480;
   const measureTicks = tpq * 4;
   const rightEvents = [{ tick: 0, type: 'meta', metaType: 0x51, microsecondsPerQuarter: 500000 }, { tick: 0, type: 'meta', metaType: 0x58, numerator: 4, denominator: 4 }];
@@ -19,8 +19,10 @@ function buildLongSongMidi(measureCount) {
     const t = m * measureTicks;
     rightEvents.push({ tick: t, type: 'noteOn', channel: 0, note: 64, velocity: 90 });
     rightEvents.push({ tick: t + tpq, type: 'noteOff', channel: 0, note: 64, velocity: 0 });
-    leftEvents.push({ tick: t, type: 'noteOn', channel: 1, note: 48, velocity: 80 });
-    leftEvents.push({ tick: t + tpq, type: 'noteOff', channel: 1, note: 48, velocity: 0 });
+    if (m >= leftStartMeasure) {
+      leftEvents.push({ tick: t, type: 'noteOn', channel: 1, note: 48, velocity: 80 });
+      leftEvents.push({ tick: t + tpq, type: 'noteOff', channel: 1, note: 48, velocity: 0 });
+    }
   }
   return { formatType: 1, ticksPerQuarter: tpq, tracks: [rightEvents, leftEvents] };
 }
@@ -41,6 +43,24 @@ test('generateDefaultLessons on a single-hand song (no left track) produces no l
   const stages = new Set(lessons.map(l => l.stage));
   assert.ok(stages.has('A'));
   assert.ok(!stages.has('B'), 'a single-hand song has nothing to combine, so no stage B');
+});
+
+test('generateDefaultLessons does not create an empty first-measure hand lesson', () => {
+  const midi = buildLongSongMidi(8, 1);
+  const analysis = analyzeSong(midi, { title: 'delayed left hand' });
+  const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
+
+  assert.ok(
+    !lessons.some(lesson =>
+      lesson.hand_mode === 'left' &&
+      lesson.start_measure === 0 &&
+      lesson.end_measure === 1),
+    '左手第一小节没有音符时不应生成空课节',
+  );
+  assert.ok(
+    lessons.some(lesson => lesson.hand_mode === 'left' && lesson.end_measure >= 2),
+    '左手真正开始出现后仍应生成课节',
+  );
 });
 
 test('lesson ranges never shrink within the same hand_mode phase (no "8 then back to 2" regressions)', () => {

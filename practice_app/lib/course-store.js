@@ -15,7 +15,11 @@ const path = require('path');
 const { readMidi } = require('./midi-file.js');
 const { analyzeSong, extractTrackNotes, groupIntoEvents } = require('./analyze.js');
 const { exportLessonBuffer } = require('./lesson-export.js');
-const { predictFingeringForEvents } = require('./fingering-engine.js');
+const {
+  predictFingeringForEvents,
+  applyExplicitFingering,
+  validateFingeringForEvents,
+} = require('./fingering-engine.js');
 
 const APP_ROOT = path.join(__dirname, '..');
 const COURSES_ROOT = path.join(APP_ROOT, 'courses');
@@ -276,7 +280,7 @@ function spotCheckLessons(handMode, measureCount, speed, titlePrefix) {
  *   degrades to 'right' so the course is still fully playable.
  */
 function generateDefaultLessons(midi, analysis, assignment) {
-  const { left: leftTrackIndex } = assignment;
+  const { left: leftTrackIndex, right: rightTrackIndex } = assignment;
   const hasLeft = leftTrackIndex != null && !!midi.tracks[leftTrackIndex];
   const bothMode = hasLeft ? 'both' : 'right';
   const measureCount = analysis.measureCount;
@@ -298,8 +302,24 @@ function generateDefaultLessons(midi, analysis, assignment) {
     raw.push(...spotCheckLessons('right', measureCount, 0.65, '右手：').map(l => ({ ...l, stage: 'C' })));
   }
 
+  const notesByHand = {
+    right: rightTrackIndex == null ? [] : extractTrackNotes(midi.tracks[rightTrackIndex] || []),
+    left: leftTrackIndex == null ? [] : extractTrackNotes(midi.tracks[leftTrackIndex] || []),
+  };
+  const lessonHasNotes = lesson => {
+    const startMeasure = Math.max(0, lesson.start_measure ?? 0);
+    const endMeasure = Math.min(analysis.measures.length, lesson.end_measure ?? analysis.measures.length);
+    if (startMeasure >= endMeasure || !analysis.measures[startMeasure]) return false;
+    const startTick = analysis.measures[startMeasure].startTick;
+    const endTick = analysis.measures[endMeasure - 1].endTick;
+    const hands = lesson.hand_mode === 'both' ? ['right', 'left'] : [lesson.hand_mode];
+    return hands.some(hand =>
+      notesByHand[hand].some(note => note.tick >= startTick && note.tick < endTick));
+  };
+
   const seenGlobal = new Set();
   const deduped = raw.filter(lesson => {
+    if (!lessonHasNotes(lesson)) return false;
     const key = `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_measure}:${lesson.end_measure}`;
     if (seenGlobal.has(key)) return false;
     seenGlobal.add(key);
@@ -552,7 +572,7 @@ function recordPracticeResult(courseId, lessonId, result, user = null) {
 
 function handTaggedNotes(midi, handMode, assignment) {
   const { left: leftTrackIndex, right: rightTrackIndex } = assignment;
-  if (handMode !== 'right' && leftTrackIndex == null) {
+  if (handMode === 'left' && leftTrackIndex == null) {
     throw new Error('This lesson needs a left-hand track, but the course has none assigned');
   }
   const tag = (notes, hand) => notes.map(n => ({ ...n, hand }));
@@ -560,7 +580,7 @@ function handTaggedNotes(midi, handMode, assignment) {
   if (handMode === 'right') return tag(extractTrackNotes(midi.tracks[rightTrackIndex]), 'right');
   return [
     ...tag(extractTrackNotes(midi.tracks[rightTrackIndex]), 'right'),
-    ...tag(extractTrackNotes(midi.tracks[leftTrackIndex]), 'left'),
+    ...(leftTrackIndex == null ? [] : tag(extractTrackNotes(midi.tracks[leftTrackIndex]), 'left')),
   ];
 }
 
@@ -602,14 +622,24 @@ function getLessonEventSelection(courseId, lessonId) {
 
   const sourcePath = path.join(courseDir(courseId), course.source_midi);
   const midi = readMidi(fs.readFileSync(sourcePath));
-  const notes = handTaggedNotes(midi, lesson.hand_mode, course.hand_tracks);
+  // 全曲事件轴必须与课节的 hand_mode 无关，否则同一音符会因为“单手课/双手课”
+  // 的跨轨合并结果不同而得到不同的事件位置和指法。
+  const notes = handTaggedNotes(midi, 'both', course.hand_tracks);
   const allEvents = groupIntoEvents(notes, midi.ticksPerQuarter);
+  const lessonEvents = allEvents
+    .map(event => ({
+      ...event,
+      notes: lesson.hand_mode === 'both'
+        ? event.notes
+        : event.notes.filter(note => note.hand === lesson.hand_mode),
+    }))
+    .filter(event => event.notes.length);
 
   let slice;
   if (lesson.range_type === 'event') {
     const startEvent = Math.max(0, lesson.start_event ?? 0);
-    const endEvent = Math.min(allEvents.length, lesson.end_event ?? allEvents.length);
-    slice = allEvents.slice(startEvent, endEvent);
+    const endEvent = Math.min(lessonEvents.length, lesson.end_event ?? lessonEvents.length);
+    slice = lessonEvents.slice(startEvent, endEvent);
   } else {
     const analysis = analyzeSong(midi);
     const measures = analysis.measures;
@@ -618,7 +648,7 @@ function getLessonEventSelection(courseId, lessonId) {
     if (!measures.length || startMeasure >= measures.length) throw new Error('Measure range out of bounds');
     const startTick = measures[startMeasure].startTick;
     const endTick = endMeasure > 0 ? measures[endMeasure - 1].endTick : measures[0].endTick;
-    slice = allEvents.filter(e => e.tick >= startTick && e.tick < endTick);
+    slice = lessonEvents.filter(e => e.tick >= startTick && e.tick < endTick);
   }
 
   if (!slice.length) throw new Error('This lesson has no note events in range');
@@ -635,6 +665,7 @@ function serializeLessonEvents(events) {
       hand: n.hand,
       velocity: n.velocity,
       ...(n.finger != null ? { finger: n.finger } : {}),
+      ...(n.fingerSource ? { fingerSource: n.fingerSource } : {}),
     })),
   }));
 }
@@ -643,8 +674,9 @@ function serializeLessonEvents(events) {
 // for the browser-side real-time scoring session - see lib/scoring.js. This
 // intentionally mirrors resolveLessonRange's boundaries but returns the
 // actual notes to press rather than a tick range to export.
-function getLessonEvents(courseId, lessonId) {
-  const { slice } = getLessonEventSelection(courseId, lessonId);
+function getLessonEvents(courseId, lessonId, options = {}) {
+  const { midi, allEvents, slice } = getLessonEventSelection(courseId, lessonId);
+  applyCourseFingering(allEvents, midi.ticksPerQuarter, options.explicitFingering);
   return serializeLessonEvents(slice);
 }
 
@@ -659,21 +691,61 @@ function buildHandEvents(slice, hand) {
   for (const event of slice) {
     const notes = event.notes.filter(n => n.hand === hand);
     if (!notes.length) continue;
-    if (!byTick.has(event.tick)) byTick.set(event.tick, []);
-    byTick.get(event.tick).push(...notes);
+    if (!byTick.has(event.tick)) {
+      byTick.set(event.tick, { tick: event.tick, endTick: event.endTick, notes: [] });
+    }
+    const handEvent = byTick.get(event.tick);
+    handEvent.endTick = Math.max(handEvent.endTick, event.endTick);
+    handEvent.notes.push(...notes);
   }
   // 返回按 tick 排序的事件数组（每项 notes 按音高升序，与 extractTrackNotes 保持一致）
-  return [...byTick.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([, notes]) => ({ notes: notes.sort((a, b) => a.note - b.note) }));
+  return [...byTick.values()]
+    .sort((a, b) => a.tick - b.tick)
+    .map(event => ({
+      ...event,
+      notes: event.notes.sort((a, b) => a.note - b.note),
+    }));
+}
+
+function applyCourseFingering(allEvents, ticksPerQuarter, explicitFingering = null) {
+  const diagnostics = {};
+  for (const hand of ['right', 'left']) {
+    const handEvents = buildHandEvents(allEvents, hand);
+    if (!handEvents.length) continue;
+    const explicit = explicitFingering?.[hand];
+    if (Array.isArray(explicit)) {
+      applyExplicitFingering(handEvents, explicit, 'curated');
+    } else {
+      predictFingeringForEvents(handEvents, hand, {
+        ticksPerQuarter,
+        source: 'generated',
+      });
+    }
+    diagnostics[hand] = validateFingeringForEvents(handEvents, hand);
+  }
+  return diagnostics;
 }
 
 // The practice page needs the entire course score as well as the playable
 // event slice. Notes from the active lesson carry their global event index;
 // every other score note is intentionally left unmarked for grey rendering.
-function getLessonPracticeData(courseId, lessonId) {
+function getLessonPracticeData(courseId, lessonId, options = {}) {
   const { course, lesson, midi, allEvents, slice } = getLessonEventSelection(courseId, lessonId);
+  const fingeringDiagnostics = applyCourseFingering(
+    allEvents,
+    midi.ticksPerQuarter,
+    options.explicitFingering,
+  );
   const targetEventByNote = new Map();
+  const fingeringByNote = new Map();
+  for (const event of allEvents) {
+    for (const note of event.notes) {
+      fingeringByNote.set(noteIdentity(note, note.hand), {
+        finger: note.finger,
+        source: note.fingerSource,
+      });
+    }
+  }
   for (const event of slice) {
     for (const note of event.notes) targetEventByNote.set(noteIdentity(note, note.hand), event.index);
   }
@@ -682,21 +754,19 @@ function getLessonPracticeData(courseId, lessonId) {
     if (trackIndex == null || !midi.tracks[trackIndex]) return null;
     return {
       role: hand,
-      notes: extractTrackNotes(midi.tracks[trackIndex]).map(note => ({
-        midi: note.note,
-        start: note.tick / midi.ticksPerQuarter,
-        duration: Math.max(0.05, (note.endTick - note.tick) / midi.ticksPerQuarter),
-        eventIndex: targetEventByNote.get(noteIdentity(note, hand)) ?? null,
-      })),
+      notes: extractTrackNotes(midi.tracks[trackIndex]).map(note => {
+        const fingering = fingeringByNote.get(noteIdentity(note, hand));
+        return {
+          midi: note.note,
+          start: note.tick / midi.ticksPerQuarter,
+          duration: Math.max(0.05, (note.endTick - note.tick) / midi.ticksPerQuarter),
+          eventIndex: targetEventByNote.get(noteIdentity(note, hand)) ?? null,
+          ...(fingering?.finger != null ? { finger: fingering.finger } : {}),
+          ...(fingering?.source ? { fingerSource: fingering.source } : {}),
+        };
+      }),
     };
   };
-
-  // ── Viterbi 指法预算（在序列化前直接修改 slice 中的 note 对象）────────
-  // 按手拆分 slice 事件，每手独立跑 DP，音符已按音高升序排好（analyze.js 保证）
-  const rightHandEvents = buildHandEvents(slice, 'right');
-  const leftHandEvents  = buildHandEvents(slice, 'left');
-  if (rightHandEvents.length) predictFingeringForEvents(rightHandEvents, 'right');
-  if (leftHandEvents.length)  predictFingeringForEvents(leftHandEvents,  'left');
 
   const analysis = analyzeSong(midi, { title: course.title });
   const tracks = [
@@ -707,6 +777,7 @@ function getLessonPracticeData(courseId, lessonId) {
 
   return {
     events: serializeLessonEvents(slice),
+    fingeringDiagnostics,
     sheet: {
       targetEventIndexes: slice.map(event => event.index),
       score: {
@@ -879,6 +950,8 @@ module.exports = {
   updateSettings,
   seedDefaultCourses,
   loadDrillManifest,
+  buildHandEvents,
+  applyCourseFingering,
   SEED_SONGS,
   DEFAULT_COURSE_ID,
   calculateStarCount,
