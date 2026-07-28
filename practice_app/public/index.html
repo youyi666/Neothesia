@@ -1103,7 +1103,13 @@ const NOTE_TONE = {
   mistake: '#d88732',
 };
 
-function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'default', annotation = null, stackIndex = 0, systemIndex = 0) {
+function annotationLaneX(x, stackIndex, minX, maxX) {
+  const laneOffsets = [0, -14, 14, -28, 28, -42, 42];
+  const offset = laneOffsets[stackIndex % laneOffsets.length] || 0;
+  return Math.max(minX, Math.min(maxX, x + offset));
+}
+
+function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'default', annotation = null, stackIndex = 0, systemIndex = 0, layout = {}) {
   const position = staffPosition(note.midi, clef);
   const y = noteY(note.midi, clef, staffTop);
   const duration = note.duration;
@@ -1111,6 +1117,11 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
   const whole = duration >= 3.75;
   const stemUp = position <= 4;
   const ink = NOTE_TONE[tone] || NOTE_TONE.default;
+  const minAnnotationX = layout.annotationMinX ?? 18;
+  const maxAnnotationX = layout.annotationMaxX ?? (x + 1);
+  const labelX = annotationLaneX(x, stackIndex, minAnnotationX, maxAnnotationX);
+  const labelGapY = layout.hasBass && clef === 'treble' ? 58 : 76;
+  const passiveLabelGapY = layout.hasBass && clef === 'treble' ? 65 : 83;
 
   drawLedgerLines(svg, x, position, staffTop, ink);
 
@@ -1153,7 +1164,7 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
   if (showNames) {
     // 和弦时多个音符的灰色音名标签按 stackIndex 向下错开，避免同列重叠
     svg.appendChild(svgEl('text', {
-      x, y:staffTop + 83 + stackIndex * 14, 'text-anchor':'middle', 'font-size':9.5,
+      x:labelX, y:staffTop + passiveLabelGapY + stackIndex * 12, 'text-anchor':'middle', 'font-size':9.5,
       'font-family':'Arial, sans-serif', 'font-weight':'600', fill:'#7b7188',
     }, midiName(note.midi)));
   }
@@ -1161,7 +1172,7 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
   if (annotation?.letter && annotation.showLetter !== false) {
     // 和弦时彩色音名标签同样按 stackIndex 向下错开
     svg.appendChild(svgEl('text', {
-      x, y:staffTop + 76 + stackIndex * 14, 'text-anchor':'middle', 'font-size':11,
+      x:labelX, y:staffTop + labelGapY + stackIndex * 12, 'text-anchor':'middle', 'font-size':11,
       'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
     }, annotation.letter));
   }
@@ -1177,12 +1188,13 @@ function drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone = 'de
     // 按 stackIndex 向上错开；Math.max(16,...) 保证框体不飞出 SVG 顶部：
     // 最小 boxY=16 → rect 顶边=4，即使长序列累积多级也不会超出画布。
     const boxY = Math.max(16, Math.min(fy, staffTop - 8) - stackIndex * 16);
+    const boxX = annotationLaneX(x, stackIndex, minAnnotationX, maxAnnotationX);
     svg.appendChild(svgEl('rect', {
-      x:x-8, y:boxY-12, width:16, height:14, rx:2,
+      x:boxX-8, y:boxY-12, width:16, height:14, rx:2,
       fill:'#fff', stroke:ink, 'stroke-width':1.2,
     }));
     svg.appendChild(svgEl('text', {
-      x, y:boxY-2, 'text-anchor':'middle', 'font-size':9,
+      x:boxX, y:boxY-2, 'text-anchor':'middle', 'font-size':9,
       'font-family':'Arial, sans-serif', 'font-weight':'800', fill:ink,
     }, String(displayedFinger)));
   }
@@ -1256,7 +1268,7 @@ function drawStaff(svg, options) {
   const {
     track, rests, clef, staffTop, width, contentX, measureWidth,
     systemStart, systemEnd, beatsPerMeasure, systemMeasures, systemIndex,
-    showTime, numerator, denominator, showNames, finalSystem, fingering, noteToneFor, noteAnnotationFor,
+    showTime, numerator, denominator, showNames, finalSystem, fingering, noteToneFor, noteAnnotationFor, hasBass,
   } = options;
 
   for (let line = 0; line < 5; line++) {
@@ -1317,7 +1329,11 @@ function drawStaff(svg, options) {
       // 使用模 4 循环：0→1→2→3→0→1…，密集音型最多占 4 个固定高度层，不会无限堆积溢出。
       stackIndex = (lastBoxX != null && Math.abs(x - lastBoxX) < 18) ? (stackIndex + 1) % 4 : 0;
       lastBoxX = x;
-      drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone, annotation, stackIndex, systemIndex);
+      drawNote(svg, note, x, clef, staffTop, showNames, fingerNum, tone, annotation, stackIndex, systemIndex, {
+        annotationMinX: contentX + 8,
+        annotationMaxX: finalBarlineX - 12,
+        hasBass,
+      });
       noteIdx++;
     }
   }
@@ -1404,6 +1420,7 @@ function buildStaffSvg(score, width, showNames, options = {}) {
       finalSystem:system === systemCount - 1,
       noteToneFor:options.noteToneFor,
       noteAnnotationFor:options.noteAnnotationFor,
+      hasBass,
     };
 
     const currentNote = Number.isInteger(options.currentEventIndex)

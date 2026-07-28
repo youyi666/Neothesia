@@ -67,3 +67,22 @@ test('lesson score annotations stay inside the final measure boundary', () => {
     /const xForBeat = beat => Math\.min\(width - 32/,
   );
 });
+
+test('dense lesson annotations use horizontal lanes and preserve the grand-staff gap', () => {
+  assert.match(
+    html,
+    /function annotationLaneX\(x, stackIndex, minX, maxX\)/,
+  );
+  assert.match(
+    html,
+    /const laneOffsets = \[0, -14, 14, -28, 28, -42, 42\];/,
+  );
+  assert.match(
+    html,
+    /layout\.hasBass && clef === 'treble' \? 58 : 76/,
+  );
+  assert.match(
+    html,
+    /annotationMaxX: finalBarlineX - 12/,
+  );
+});
