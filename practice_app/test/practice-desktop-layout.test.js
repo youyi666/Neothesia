@@ -34,3 +34,17 @@ test('small desktop practice view stacks the finger guide above the score', () =
     /\.practice-finger-float\s*{\s*position:static;[\s\S]*?width:100%;/,
   );
 });
+
+test('short landscape view removes the hidden finger-guide grid column', () => {
+  const shortLandscapeMedia = [
+    ...html.matchAll(
+      /@media \(orientation:landscape\) and \(max-height:700px\)\s*{([\s\S]*?)\n}/g,
+    ),
+  ].find(match => match[1].includes('.practice-finger-float'));
+
+  assert.ok(shortLandscapeMedia, 'missing the short-landscape breakpoint');
+  assert.match(
+    shortLandscapeMedia[1],
+    /\.practice-score-layout\s*{\s*display:block;\s*width:100%;\s*margin-top:0;/,
+  );
+});
