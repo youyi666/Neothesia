@@ -5,13 +5,15 @@ const {
   predictFingeringForEvents,
   generateValidStates,
   calculateTransitionCost,
+  applyExplicitFingering,
+  validateFingeringForEvents,
   isBlackKey,
 } = require('../lib/fingering-engine.js');
 
 // ── 辅助函数 ──────────────────────────────────────────────────────────────
-// 构造单音事件（右手）
-function singleNote(midiPitch) {
-  return { notes: [{ note: midiPitch, hand: 'right' }] };
+// 构造单音事件
+function singleNote(midiPitch, hand = 'right') {
+  return { notes: [{ note: midiPitch, hand }] };
 }
 // 构造和弦事件（按音高升序）
 function chordNotes(pitches, hand = 'right') {
@@ -113,6 +115,24 @@ test('C4-D4-E4-F4-G4 五个白键应覆盖 1-5 指', () => {
   }
 });
 
+test('左手 C-D-E 上行应使用 5-4-3，而不是照搬右手方向', () => {
+  const events = [48, 50, 52].map(pitch => singleNote(pitch, 'left'));
+  predictFingeringForEvents(events, 'left');
+  assert.deepEqual(
+    events.map(event => event.notes[0].finger),
+    [5, 4, 3],
+  );
+});
+
+test('C 大调一个八度应生成标准左右手穿指', () => {
+  const right = [60, 62, 64, 65, 67, 69, 71, 72].map(singleNote);
+  const left = [48, 50, 52, 53, 55, 57, 59, 60].map(pitch => singleNote(pitch, 'left'));
+  predictFingeringForEvents(right, 'right');
+  predictFingeringForEvents(left, 'left');
+  assert.deepEqual(right.map(event => event.notes[0].finger), [1, 2, 3, 1, 2, 3, 4, 5]);
+  assert.deepEqual(left.map(event => event.notes[0].finger), [5, 4, 3, 2, 1, 3, 2, 1]);
+});
+
 // ── 5. predictFingeringForEvents 和弦 ────────────────────────────────────
 test('右手 C 大三和弦 [60,64,67] 应输出升序合法组合', () => {
   const events = [chordNotes([60, 64, 67], 'right')];
@@ -147,6 +167,26 @@ test('左手和弦 [48,52,55] 应输出从低音到高音手指递减', () => {
   // 左手三音和弦：低音→高音手指必须严格递减
   assert.ok(fingers[0] > fingers[1] && fingers[1] > fingers[2],
     `左手和弦指法 [${fingers}] 应从低音到高音递减（如 [5,3,1]）`);
+});
+
+test('显式专项训练指法应覆盖自动生成并标记来源', () => {
+  const events = [singleNote(60), singleNote(61), singleNote(62)];
+  applyExplicitFingering(events, [1, 3, 1]);
+  assert.deepEqual(events.map(event => event.notes[0].finger), [1, 3, 1]);
+  assert.ok(events.every(event => event.notes[0].fingerSource === 'curated'));
+});
+
+test('科学性校验应拒绝左手交叉和弦并提示拇指黑键', () => {
+  const crossed = [chordNotes([48, 52, 55], 'left')];
+  crossed[0].notes.forEach((note, index) => { note.finger = [1, 3, 5][index]; });
+  const crossedResult = validateFingeringForEvents(crossed, 'left');
+  assert.equal(crossedResult.valid, false);
+  assert.ok(crossedResult.errors.some(error => error.code === 'crossed_chord_fingers'));
+
+  const thumbOnBlack = [singleNote(61)];
+  thumbOnBlack[0].notes[0].finger = 1;
+  const blackResult = validateFingeringForEvents(thumbOnBlack, 'right');
+  assert.ok(blackResult.warnings.some(warning => warning.code === 'thumb_on_black'));
 });
 
 // ── 6. 容错与性能 ──────────────────────────────────────────────────────

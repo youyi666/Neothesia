@@ -1,238 +1,608 @@
 'use strict';
+
 /**
- * lib/fingering-engine.js
- * 钢琴指法自动生成引擎（基于 Viterbi 动态规划，支持单音与多音/和弦事件）
- * 遵循增量模块开发原则，零外部依赖，输出带 finger 字段的 Note 序列。
+ * 钢琴指法自动生成引擎。
  *
- * 调用方只需：
- *   const { predictFingeringForEvents } = require('./fingering-engine.js');
- *   predictFingeringForEvents(rightEvents, 'right');  // 直接修改 note.finger
+ * 设计依据：
+ * - 左右手必须镜像处理：同一段上行旋律，右手通常向 1→5 展开，
+ *   左手通常向 5→1 展开。
+ * - 使用 Parncutt 等人提出的“实用跨度 / 舒适跨度”思想约束相邻手指。
+ * - 单音、和弦分别计价；和弦之间不再把所有音符两两交叉比较。
+ * - 指法先按整首曲子生成，再由课程层截取，保证同一音符在不同课节中一致。
+ *
+ * 这仍然是面向初学者的规则模型，而不是“唯一正确”的演奏版本。乐句、触键、
+ * 速度和手型都会影响专业演奏者的最终选择，因此同时提供校验器供全曲库审计。
  */
 
-// ── 基础物理与代价权重配置 ────────────────────────────────────────────────
-const WEIGHTS = {
-  blackKeyThumb:    50,    // 大拇指(1指)按黑键惩罚
-  blackKeyPinky:    30,    // 小拇指(5指)按黑键惩罚
-  sameFingerRepeat: 800,   // 异音同指连续弹奏惩罚
-  stretchLimit:     12,    // 正常手部最大跨度（半音数，默认八度）
-  thumbCrossing:    15,    // 穿/跨指时的代价
-  chordStretch:     60,    // 和弦内单组相邻手指间距超限惩罚（每半音）
-  chordStretchMax:  5,     // 和弦内相邻手指正常跨度上限（半音）
-  invalidCross:     10000, // 严重违背物理习惯的非法交叉死锁
-};
+const UNPLAYABLE_COST = 100000;
 
-/**
- * 判断指定 MIDI 音高是否为黑键
- * @param {number} pitch - MIDI 音高 (0-127)
- * @returns {boolean}
- */
+// Parncutt et al. (1997) Table 1 的右手手指对跨度（半音）。
+// 左手通过反转音高方向复用同一张表，手指编号本身不反转（两手拇指都叫 1 指）。
+const PRACTICAL_SPANS = Object.freeze({
+  '1-2': { minPrac: -5, minComf: -3, minRelaxed: 1, maxRelaxed: 5, maxComf: 8, maxPrac: 10 },
+  '1-3': { minPrac: -4, minComf: -2, minRelaxed: 3, maxRelaxed: 7, maxComf: 10, maxPrac: 12 },
+  '1-4': { minPrac: -3, minComf: -1, minRelaxed: 5, maxRelaxed: 9, maxComf: 12, maxPrac: 14 },
+  '1-5': { minPrac: -1, minComf:  1, minRelaxed: 7, maxRelaxed: 10, maxComf: 13, maxPrac: 15 },
+  '2-3': { minPrac:  1, minComf:  1, minRelaxed: 1, maxRelaxed: 2, maxComf: 3, maxPrac: 5 },
+  '2-4': { minPrac:  1, minComf:  1, minRelaxed: 3, maxRelaxed: 4, maxComf: 5, maxPrac: 7 },
+  '2-5': { minPrac:  2, minComf:  2, minRelaxed: 5, maxRelaxed: 6, maxComf: 8, maxPrac: 10 },
+  '3-4': { minPrac:  1, minComf:  1, minRelaxed: 1, maxRelaxed: 2, maxComf: 2, maxPrac: 4 },
+  '3-5': { minPrac:  1, minComf:  1, minRelaxed: 3, maxRelaxed: 4, maxComf: 5, maxPrac: 7 },
+  '4-5': { minPrac:  1, minComf:  1, minRelaxed: 1, maxRelaxed: 2, maxComf: 3, maxPrac: 5 },
+});
+
+const WEIGHTS = Object.freeze({
+  thumbOnBlack: 500,
+  pinkyOnBlack: 24,
+  weakFinger4: 0.45,
+  weakFinger5: 0.2,
+  sameFingerNearbyMove: 800,
+  sameFingerReposition: 8,
+  thumbPass: 3,
+  positionShift: 1.4,
+  repeatedPitchFingerChange: 5,
+  boundaryStart: 2.5,
+  boundaryEnd: 0.5,
+  chordOuterFinger: 5,
+});
+
 function isBlackKey(pitch) {
-  return [1, 3, 6, 8, 10].includes(pitch % 12);
+  return [1, 3, 6, 8, 10].includes(((Number(pitch) % 12) + 12) % 12);
 }
 
-/**
- * 为不同音符数量生成合法的手指组合状态。
- * 右手：低音→高音，手指编号递增（1=拇指在最低音）。
- * 左手：低音→高音，手指编号递减（1=拇指在最高音），
- *       因此 combo 升序后 reverse，变为 [5…1]。
- *
- * @param {number} noteCount - 当前事件包含的音符数（按音高升序已排好）
- * @param {string} hand - 'right' | 'left'
- * @returns {Array<Array<number>>} 合法的手指排布组合列表
- */
+function getPitch(note) {
+  const pitch = note?.note ?? note?.midi ?? note?.midiPitch ?? note?.pitch;
+  return Number.isFinite(Number(pitch)) ? Number(pitch) : 60;
+}
+
 function generateValidStates(noteCount, hand = 'right') {
-  const allFingers = [1, 2, 3, 4, 5];
-  if (noteCount === 1) return allFingers.map(f => [f]);
+  const count = Math.max(0, Number(noteCount) || 0);
+  if (count === 0) return [[]];
+  if (count > 5) return [];
+  if (count === 1) return [[1], [2], [3], [4], [5]];
 
   const results = [];
-  // 递归生成 C(5, noteCount) 个升序组合
-  function combine(start, combo) {
-    if (combo.length === noteCount) {
-      // 右手升序，左手降序（拇指在最高音）
-      results.push(hand === 'right' ? [...combo] : [...combo].reverse());
+  function combine(nextFinger, combo) {
+    if (combo.length === count) {
+      results.push(hand === 'left' ? [...combo].reverse() : [...combo]);
       return;
     }
-    for (let i = start; i < allFingers.length; i++) {
-      combine(i + 1, [...combo, allFingers[i]]);
+    for (let finger = nextFinger; finger <= 5; finger++) {
+      combine(finger + 1, [...combo, finger]);
     }
   }
-  combine(0, []);
-  return results.length > 0 ? results : [allFingers.slice(0, noteCount)];
+  combine(1, []);
+  return results;
 }
 
-/**
- * 获取音符对象中的 MIDI 音高（兼容多种字段命名）
- * @param {object} note
- * @returns {number}
- */
-function getPitch(note) {
-  return note.note ?? note.midiPitch ?? note.pitch ?? 60;
+function reverseSpan(span) {
+  return {
+    minPrac: -span.maxPrac,
+    minComf: -span.maxComf,
+    minRelaxed: -span.maxRelaxed,
+    maxRelaxed: -span.minRelaxed,
+    maxComf: -span.minComf,
+    maxPrac: -span.minPrac,
+  };
 }
 
-/**
- * 计算两组指法状态转移的综合代价。
- * prevNotes/prevFingers 可以为空数组（用于初始化第一步）。
- *
- * @param {object[]} prevNotes    - 上一时刻的音符数组（已按音高升序）
- * @param {number[]} prevFingers  - 上一时刻对应的手指编号
- * @param {object[]} currNotes    - 当前时刻的音符数组（已按音高升序）
- * @param {number[]} currFingers  - 当前时刻对应的手指编号
- * @returns {number} 代价值（越小越好）
- */
-function calculateTransitionCost(prevNotes, prevFingers, currNotes, currFingers) {
+function spanForFingerPair(previousFinger, currentFinger) {
+  if (previousFinger === currentFinger) return null;
+  const low = Math.min(previousFinger, currentFinger);
+  const high = Math.max(previousFinger, currentFinger);
+  const base = PRACTICAL_SPANS[`${low}-${high}`];
+  if (!base) return null;
+  return previousFinger < currentFinger ? base : reverseSpan(base);
+}
+
+function normalizedPitchDelta(previousPitch, currentPitch, hand) {
+  const delta = currentPitch - previousPitch;
+  return hand === 'left' ? -delta : delta;
+}
+
+function spanDifficulty(previousPitch, previousFinger, currentPitch, currentFinger, hand = 'right') {
+  const delta = normalizedPitchDelta(previousPitch, currentPitch, hand);
+  const absoluteKeyboardDistance = Math.abs(currentPitch - previousPitch);
+
+  if (previousFinger === currentFinger) {
+    if (delta === 0) return 0;
+    const distance = Math.abs(delta);
+    return distance <= 5
+      ? WEIGHTS.sameFingerNearbyMove + (6 - distance) * 2
+      : WEIGHTS.sameFingerReposition + distance * 0.15;
+  }
+
+  // 超过八度的旋律跳进依靠前臂带动整只手重新落位，不应按“手指拉伸”
+  // 判断为不可弹；保留适度移动成本，让落点指法仍参与后续路径优化。
+  if (absoluteKeyboardDistance > 12) {
+    return 10 + absoluteKeyboardDistance * 0.4;
+  }
+
+  const span = spanForFingerPair(previousFinger, currentFinger);
+  if (!span) return UNPLAYABLE_COST;
+  const includesThumb = previousFinger === 1 || currentFinger === 1;
+  const passesThumb = includesThumb && (
+    (previousFinger < currentFinger && delta < 0) ||
+    (previousFinger > currentFinger && delta > 0)
+  );
+  // 三指跨拇指弹分解和弦时，常见 C-E-G-C 的 G→C 会比纯手指连奏模型
+  // 多出一个半音；这里把它视为需要手臂配合的高代价动作，而不是“不可能”。
+  const armAssistedThumbPass =
+    passesThumb &&
+    (delta >= span.minPrac - 1 && delta <= span.maxPrac + 1);
+  if (delta < span.minPrac && !armAssistedThumbPass) {
+    return UNPLAYABLE_COST + (span.minPrac - delta) * 100;
+  }
+  if (delta > span.maxPrac && !armAssistedThumbPass) {
+    return UNPLAYABLE_COST + (delta - span.maxPrac) * 100;
+  }
+
   let cost = 0;
+  if (armAssistedThumbPass) cost += 42;
+  if (delta < span.minComf) cost += (span.minComf - delta) * 18;
+  else if (delta > span.maxComf) cost += (delta - span.maxComf) * 18;
 
-  // ① 黑键惩罚：拇指/小拇指尽量不按黑键
-  for (let idx = 0; idx < currNotes.length; idx++) {
-    const finger = currFingers[idx];
-    const pitch  = getPitch(currNotes[idx]);
-    if (isBlackKey(pitch)) {
-      if (finger === 1) cost += WEIGHTS.blackKeyThumb;
-      if (finger === 5) cost += WEIGHTS.blackKeyPinky;
-    }
+  if (delta < span.minRelaxed) {
+    cost += (span.minRelaxed - delta) * (includesThumb ? 1.2 : 2.2);
+  } else if (delta > span.maxRelaxed) {
+    cost += (delta - span.maxRelaxed) * (includesThumb ? 1.2 : 2.2);
   }
 
-  // ② 和弦内部相邻手指跨度惩罚（防止"劈叉"式不自然和弦）
-  for (let idx = 0; idx + 1 < currNotes.length; idx++) {
-    const pitchSpan  = Math.abs(getPitch(currNotes[idx + 1]) - getPitch(currNotes[idx]));
-    const fingerSpan = Math.abs(currFingers[idx + 1] - currFingers[idx]);
-    // 每个手指间距的平均音程；超过上限则按超出量惩罚
-    if (fingerSpan > 0) {
-      const avgSemitones = pitchSpan / fingerSpan;
-      if (avgSemitones > WEIGHTS.chordStretchMax) {
-        cost += (avgSemitones - WEIGHTS.chordStretchMax) * WEIGHTS.chordStretch;
-      }
-    }
-  }
-
-  // ③ 事件间转移代价：同指异音惩罚 + 跨度惩罚 + 方向一致性惩罚
-  for (let i = 0; i < prevNotes.length; i++) {
-    const pPitch  = getPitch(prevNotes[i]);
-    const pFinger = prevFingers[i];
-
-    for (let j = 0; j < currNotes.length; j++) {
-      const cPitch  = getPitch(currNotes[j]);
-      const cFinger = currFingers[j];
-
-      // 异音同指连续（除非音高相同，即保持不动）
-      if (pPitch !== cPitch && pFinger === cFinger) {
-        cost += WEIGHTS.sameFingerRepeat;
-      }
-
-      // 手位移动幅度 vs 手指编号变化不匹配时的跨度惩罚
-      const pitchDiff  = Math.abs(cPitch - pPitch);
-      const fingerDiff = Math.abs(cFinger - pFinger);
-      if (pitchDiff > WEIGHTS.stretchLimit && fingerDiff < 3) {
-        cost += (pitchDiff - WEIGHTS.stretchLimit) * 20;
-      }
-
-      // 音程方向与手指方向一致性：上行曲调应用上升手指，下行曲调应用下降手指；
-      // 方向相反时（即需要穿指或跨指）加惩罚，惩罚随音程跨度线性增加。
-      const pitchDelta  = cPitch - pPitch;
-      const fingerDelta = cFinger - pFinger;
-      if (pitchDelta !== 0 && fingerDelta !== 0 &&
-          Math.sign(pitchDelta) !== Math.sign(fingerDelta)) {
-        cost += WEIGHTS.thumbCrossing + Math.abs(pitchDelta) * 2;
-      }
-    }
-  }
-
+  if (passesThumb) cost += WEIGHTS.thumbPass;
+  if (previousFinger === 3 && currentFinger === 4) cost += 1;
   return cost;
 }
 
-/**
- * 核心对外方法：为单手音符事件列表推断最优指法并写入 note.finger。
- * 直接修改传入的事件对象（增量注入，不破坏已有属性）。
- *
- * @param {Array<{notes: object[]}>} events - 单手事件列表，每条 notes 已按音高升序排好
- * @param {string} hand - 'right' | 'left'
- * @returns {Array} 同一事件数组（已注入 finger）
- */
-function predictFingeringForEvents(events, hand = 'right') {
-  try {
-    if (!events || events.length === 0) return events;
+function noteStateCost(note, finger) {
+  let cost = 0;
+  if (isBlackKey(getPitch(note))) {
+    if (finger === 1) cost += WEIGHTS.thumbOnBlack;
+    if (finger === 5) cost += WEIGHTS.pinkyOnBlack;
+  }
+  if (finger === 4) cost += WEIGHTS.weakFinger4;
+  if (finger === 5) cost += WEIGHTS.weakFinger5;
+  return cost;
+}
 
-    // ── Viterbi 前向 DP ──────────────────────────────────────────────────
-    const dp        = [];   // dp[t][stateIdx] = { cost, state }
-    const backtrace = [];   // backtrace[t][stateIdx] = prevStateIdx
+function eventPosition(notes, fingers, hand) {
+  if (!notes.length) return 0;
+  const estimates = notes.map((note, index) => {
+    const fingerOffset = fingers[index] - 1;
+    return hand === 'left'
+      ? getPitch(note) + fingerOffset * 2
+      : getPitch(note) - fingerOffset * 2;
+  }).sort((a, b) => a - b);
+  return estimates[Math.floor(estimates.length / 2)];
+}
 
-    // 初始化：第一个事件的各状态初始代价
-    const firstNotes  = events[0].notes || [events[0]];
-    const firstStates = generateValidStates(firstNotes.length, hand);
-    dp[0] = firstStates.map(state => ({
-      cost:  calculateTransitionCost([], [], firstNotes, state),
-      state,
-    }));
-    backtrace[0] = firstStates.map(() => -1);
+function eventStateCost(notes, fingers, hand) {
+  if (!notes.length || notes.length !== fingers.length) return UNPLAYABLE_COST;
+  let cost = 0;
+  for (let index = 0; index < notes.length; index++) {
+    cost += noteStateCost(notes[index], fingers[index]);
+  }
 
-    // 前向递推
-    for (let t = 1; t < events.length; t++) {
-      const currNotes  = events[t].notes   || [events[t]];
-      const prevNotes  = events[t - 1].notes || [events[t - 1]];
-      const currStates = generateValidStates(currNotes.length, hand);
-      const prevDp     = dp[t - 1];
-
-      dp[t]        = [];
-      backtrace[t] = [];
-
-      for (let cIdx = 0; cIdx < currStates.length; cIdx++) {
-        const cState = currStates[cIdx];
-        let minCost    = Infinity;
-        let bestPrevIdx = -1;
-
-        for (let pIdx = 0; pIdx < prevDp.length; pIdx++) {
-          const transitionCost = calculateTransitionCost(
-            prevNotes, prevDp[pIdx].state,
-            currNotes, cState,
-          );
-          const totalCost = prevDp[pIdx].cost + transitionCost;
-          if (totalCost < minCost) {
-            minCost     = totalCost;
-            bestPrevIdx = pIdx;
-          }
-        }
-
-        dp[t][cIdx]        = { cost: minCost, state: cState };
-        backtrace[t][cIdx] = bestPrevIdx;
-      }
+  for (let leftIndex = 0; leftIndex < notes.length; leftIndex++) {
+    for (let rightIndex = leftIndex + 1; rightIndex < notes.length; rightIndex++) {
+      const pairCost = spanDifficulty(
+        getPitch(notes[leftIndex]),
+        fingers[leftIndex],
+        getPitch(notes[rightIndex]),
+        fingers[rightIndex],
+        hand,
+      );
+      cost += pairCost >= UNPLAYABLE_COST ? pairCost : pairCost * 1.2;
     }
+  }
 
-    // ── 回溯最优路径 ──────────────────────────────────────────────────────
-    const lastDp = dp[events.length - 1];
-    let bestLastIdx  = 0;
-    let minFinalCost = Infinity;
-    for (let idx = 0; idx < lastDp.length; idx++) {
-      if (lastDp[idx].cost < minFinalCost) {
-        minFinalCost = lastDp[idx].cost;
-        bestLastIdx  = idx;
-      }
+  if (notes.length >= 3 && getPitch(notes.at(-1)) - getPitch(notes[0]) >= 7) {
+    const expectedLow = hand === 'left' ? 5 : 1;
+    const expectedHigh = hand === 'left' ? 1 : 5;
+    if (fingers[0] !== expectedLow) cost += WEIGHTS.chordOuterFinger;
+    if (fingers.at(-1) !== expectedHigh) cost += WEIGHTS.chordOuterFinger;
+  }
+  return cost;
+}
+
+function representativePitch(event) {
+  const notes = event?.notes || [event];
+  if (!notes.length) return 60;
+  return notes.reduce((sum, note) => sum + getPitch(note), 0) / notes.length;
+}
+
+function contourDirection(events, fromStart, hand) {
+  if (events.length < 2) return 0;
+  const indexes = fromStart
+    ? [...events.keys()]
+    : [...events.keys()].reverse();
+  const anchor = representativePitch(events[indexes[0]]);
+  for (const index of indexes.slice(1)) {
+    const pitch = representativePitch(events[index]);
+    if (pitch === anchor) continue;
+    const direction = Math.sign(fromStart ? pitch - anchor : anchor - pitch);
+    return hand === 'left' ? -direction : direction;
+  }
+  return 0;
+}
+
+function boundaryCost(state, direction, kind) {
+  if (state.length !== 1) return 0;
+  const finger = state[0];
+  if (direction === 0) return Math.abs(finger - 3) * 0.25;
+  const ideal = kind === 'start'
+    ? (direction > 0 ? 1 : 5)
+    : (direction > 0 ? 5 : 1);
+  const weight = kind === 'start' ? WEIGHTS.boundaryStart : WEIGHTS.boundaryEnd;
+  return Math.abs(finger - ideal) * weight;
+}
+
+function matchedVoicePairs(previousNotes, previousFingers, currentNotes, currentFingers) {
+  const pairs = [];
+  const usedPrevious = new Set();
+  const usedCurrent = new Set();
+
+  for (let currentIndex = 0; currentIndex < currentNotes.length; currentIndex++) {
+    const pitch = getPitch(currentNotes[currentIndex]);
+    const previousIndex = previousNotes.findIndex((note, index) =>
+      !usedPrevious.has(index) && getPitch(note) === pitch);
+    if (previousIndex >= 0) {
+      pairs.push([previousIndex, currentIndex, true]);
+      usedPrevious.add(previousIndex);
+      usedCurrent.add(currentIndex);
     }
+  }
 
-    const optimalStates = new Array(events.length);
-    let currIdx = bestLastIdx;
-    for (let t = events.length - 1; t >= 0; t--) {
-      optimalStates[t] = dp[t][currIdx].state;
-      currIdx = backtrace[t][currIdx];
-    }
+  const remainingPrevious = previousNotes
+    .map((_, index) => index)
+    .filter(index => !usedPrevious.has(index));
+  const remainingCurrent = currentNotes
+    .map((_, index) => index)
+    .filter(index => !usedCurrent.has(index));
+  const pairCount = Math.min(remainingPrevious.length, remainingCurrent.length);
+  for (let index = 0; index < pairCount; index++) {
+    const previousIndex = remainingPrevious.length === 1
+      ? remainingPrevious[0]
+      : remainingPrevious[Math.round(index * (remainingPrevious.length - 1) / Math.max(1, pairCount - 1))];
+    const currentIndex = remainingCurrent.length === 1
+      ? remainingCurrent[0]
+      : remainingCurrent[Math.round(index * (remainingCurrent.length - 1) / Math.max(1, pairCount - 1))];
+    pairs.push([previousIndex, currentIndex, false]);
+  }
 
-    // ── 写入 finger 字段（增量注入，不破坏已有属性）───────────────────────
-    for (let t = 0; t < events.length; t++) {
-      const notes = events[t].notes || [events[t]];
-      for (let nIdx = 0; nIdx < notes.length; nIdx++) {
-        notes[nIdx].finger = optimalStates[t][nIdx] ?? 1; // 默认保底 1 指
-      }
-    }
+  return pairs;
+}
 
-    console.log(
-      `[FingeringEngine] 成功为 ${events.length} 个事件生成 ${hand} 手指法`,
+function calculateTransitionCost(
+  previousNotes,
+  previousFingers,
+  currentNotes,
+  currentFingers,
+  hand = 'right',
+) {
+  let cost = eventStateCost(currentNotes, currentFingers, hand);
+  if (!previousNotes.length) return cost;
+
+  if (previousNotes.length === 1 && currentNotes.length === 1) {
+    cost += spanDifficulty(
+      getPitch(previousNotes[0]),
+      previousFingers[0],
+      getPitch(currentNotes[0]),
+      currentFingers[0],
+      hand,
     );
-    return events;
+    return cost;
+  }
 
-  } catch (error) {
-    // 容错防崩溃：算法异常时静默记录日志，降级返回原事件（不带指法）
-    console.error('[FingeringEngine Error] 指法生成异常，降级无指法返回:', error.message);
-    return events;
+  const previousPosition = eventPosition(previousNotes, previousFingers, hand);
+  const currentPosition = eventPosition(currentNotes, currentFingers, hand);
+  const positionDistance = Math.abs(currentPosition - previousPosition);
+  cost += Math.min(16, positionDistance * WEIGHTS.positionShift);
+
+  for (const [previousIndex, currentIndex, samePitch] of matchedVoicePairs(
+    previousNotes,
+    previousFingers,
+    currentNotes,
+    currentFingers,
+  )) {
+    if (samePitch) {
+      if (previousFingers[previousIndex] !== currentFingers[currentIndex]) {
+        cost += WEIGHTS.repeatedPitchFingerChange;
+      }
+      continue;
+    }
+    const voiceCost = spanDifficulty(
+      getPitch(previousNotes[previousIndex]),
+      previousFingers[previousIndex],
+      getPitch(currentNotes[currentIndex]),
+      currentFingers[currentIndex],
+      hand,
+    );
+    cost += voiceCost >= UNPLAYABLE_COST ? voiceCost * 0.2 : voiceCost * 0.25;
+  }
+  return cost;
+}
+
+function splitAtPhraseGaps(events, ticksPerQuarter) {
+  if (!Number.isFinite(ticksPerQuarter) || ticksPerQuarter <= 0) return [events];
+  const segments = [];
+  let current = [];
+  for (const event of events) {
+    const previous = current.at(-1);
+    const previousEnd = previous?.endTick ??
+      Math.max(...(previous?.notes || []).map(note => note.endTick ?? previous?.tick ?? 0));
+    if (previous && Number.isFinite(event.tick) &&
+        event.tick - previousEnd >= ticksPerQuarter * 1.5) {
+      segments.push(current);
+      current = [];
+    }
+    current.push(event);
+  }
+  if (current.length) segments.push(current);
+  return segments;
+}
+
+function predictSegment(events, hand, source) {
+  if (!events.length) return;
+  const statesByEvent = events.map(event =>
+    generateValidStates((event.notes || [event]).length, hand));
+  if (statesByEvent.some(states => states.length === 0)) {
+    throw new Error('单手同一时刻超过 5 个音符，无法生成可弹指法');
+  }
+
+  const startDirection = contourDirection(events, true, hand);
+  const endDirection = contourDirection(events, false, hand);
+  const dp = [];
+  const backtrace = [];
+
+  const firstNotes = events[0].notes || [events[0]];
+  dp[0] = statesByEvent[0].map(state => ({
+    cost: eventStateCost(firstNotes, state, hand) +
+      boundaryCost(state, startDirection, 'start'),
+    state,
+  }));
+  backtrace[0] = statesByEvent[0].map(() => -1);
+
+  for (let eventIndex = 1; eventIndex < events.length; eventIndex++) {
+    const previousNotes = events[eventIndex - 1].notes || [events[eventIndex - 1]];
+    const currentNotes = events[eventIndex].notes || [events[eventIndex]];
+    dp[eventIndex] = [];
+    backtrace[eventIndex] = [];
+
+    for (let currentIndex = 0; currentIndex < statesByEvent[eventIndex].length; currentIndex++) {
+      const currentState = statesByEvent[eventIndex][currentIndex];
+      let bestCost = Infinity;
+      let bestPrevious = -1;
+      for (let previousIndex = 0; previousIndex < dp[eventIndex - 1].length; previousIndex++) {
+        const total = dp[eventIndex - 1][previousIndex].cost +
+          calculateTransitionCost(
+            previousNotes,
+            dp[eventIndex - 1][previousIndex].state,
+            currentNotes,
+            currentState,
+            hand,
+          );
+        if (total < bestCost) {
+          bestCost = total;
+          bestPrevious = previousIndex;
+        }
+      }
+      dp[eventIndex][currentIndex] = { cost: bestCost, state: currentState };
+      backtrace[eventIndex][currentIndex] = bestPrevious;
+    }
+  }
+
+  const lastIndex = events.length - 1;
+  let bestLastIndex = 0;
+  let bestFinalCost = Infinity;
+  for (let stateIndex = 0; stateIndex < dp[lastIndex].length; stateIndex++) {
+    const total = dp[lastIndex][stateIndex].cost +
+      boundaryCost(dp[lastIndex][stateIndex].state, endDirection, 'end');
+    if (total < bestFinalCost) {
+      bestFinalCost = total;
+      bestLastIndex = stateIndex;
+    }
+  }
+
+  const optimalStates = new Array(events.length);
+  let stateIndex = bestLastIndex;
+  for (let eventIndex = lastIndex; eventIndex >= 0; eventIndex--) {
+    optimalStates[eventIndex] = dp[eventIndex][stateIndex].state;
+    stateIndex = backtrace[eventIndex][stateIndex];
+  }
+
+  for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
+    const notes = events[eventIndex].notes || [events[eventIndex]];
+    for (let noteIndex = 0; noteIndex < notes.length; noteIndex++) {
+      notes[noteIndex].finger = optimalStates[eventIndex][noteIndex];
+      notes[noteIndex].fingerSource = source;
+    }
   }
 }
 
-module.exports = { predictFingeringForEvents, generateValidStates, calculateTransitionCost, isBlackKey };
+function predictFingeringForEvents(events, hand = 'right', options = {}) {
+  if (!events || events.length === 0) return events;
+  const normalizedHand = hand === 'left' ? 'left' : 'right';
+  const source = options.source || 'generated';
+  for (const segment of splitAtPhraseGaps(events, options.ticksPerQuarter)) {
+    predictSegment(segment, normalizedHand, source);
+  }
+  if (options.log === true) {
+    console.log(`[FingeringEngine] 为 ${events.length} 个事件生成 ${normalizedHand} 手指法`);
+  }
+  return events;
+}
+
+function applyExplicitFingering(events, fingers, source = 'curated') {
+  if (!Array.isArray(fingers)) return false;
+  const notes = events.flatMap(event => event.notes || [event]);
+  if (notes.length !== fingers.length) {
+    throw new Error(`显式指法长度 ${fingers.length} 与音符数 ${notes.length} 不一致`);
+  }
+  for (let index = 0; index < notes.length; index++) {
+    const finger = Number(fingers[index]);
+    if (!Number.isInteger(finger) || finger < 1 || finger > 5) {
+      throw new Error(`第 ${index + 1} 个显式指法不是 1-5：${fingers[index]}`);
+    }
+    notes[index].finger = finger;
+    notes[index].fingerSource = source;
+  }
+  return true;
+}
+
+function validationIssue(code, message, eventIndex, noteIndex, details = {}) {
+  return { code, message, eventIndex, noteIndex, ...details };
+}
+
+function hasThumbFreePlayableState(notes, hand) {
+  return generateValidStates(notes.length, hand).some(state =>
+    eventStateCost(notes, state, hand) < UNPLAYABLE_COST &&
+    !state.some((finger, index) => finger === 1 && isBlackKey(getPitch(notes[index]))));
+}
+
+function validateFingeringForEvents(events, hand = 'right', options = {}) {
+  const errors = [];
+  const warnings = [];
+  const normalizedHand = hand === 'left' ? 'left' : 'right';
+
+  for (let eventIndex = 0; eventIndex < (events || []).length; eventIndex++) {
+    const notes = events[eventIndex].notes || [events[eventIndex]];
+    if (notes.length > 5) {
+      errors.push(validationIssue(
+        'too_many_simultaneous_notes',
+        '单手同一时刻超过 5 个音符',
+        eventIndex,
+        null,
+        { noteCount: notes.length },
+      ));
+    }
+
+    const fingers = notes.map(note => Number(note.finger));
+    for (let noteIndex = 0; noteIndex < notes.length; noteIndex++) {
+      const finger = fingers[noteIndex];
+      if (!Number.isInteger(finger) || finger < 1 || finger > 5) {
+        errors.push(validationIssue(
+          'invalid_finger',
+          '指法必须是 1-5',
+          eventIndex,
+          noteIndex,
+          { finger: notes[noteIndex].finger },
+        ));
+      } else if (finger === 1 && isBlackKey(getPitch(notes[noteIndex])) &&
+                 options.allowThumbOnBlack !== true) {
+        const avoidable = hasThumbFreePlayableState(notes, normalizedHand);
+        warnings.push(validationIssue(
+          avoidable ? 'thumb_on_black' : 'required_thumb_on_black',
+          avoidable
+            ? '存在不让拇指按黑键的可弹和弦手型，建议人工复核'
+            : '曲目本身的音程或和弦形状迫使拇指落在黑键',
+          eventIndex,
+          noteIndex,
+          { pitch: getPitch(notes[noteIndex]), avoidable },
+        ));
+      }
+    }
+
+    if (fingers.every(Number.isInteger)) {
+      for (let noteIndex = 1; noteIndex < notes.length; noteIndex++) {
+        const ordered = normalizedHand === 'left'
+          ? fingers[noteIndex - 1] > fingers[noteIndex]
+          : fingers[noteIndex - 1] < fingers[noteIndex];
+        if (!ordered) {
+          errors.push(validationIssue(
+            'crossed_chord_fingers',
+            '和弦内手指顺序发生交叉或重复',
+            eventIndex,
+            noteIndex,
+            { fingers },
+          ));
+          break;
+        }
+        const pairCost = spanDifficulty(
+          getPitch(notes[noteIndex - 1]),
+          fingers[noteIndex - 1],
+          getPitch(notes[noteIndex]),
+          fingers[noteIndex],
+          normalizedHand,
+        );
+        if (pairCost >= UNPLAYABLE_COST) {
+          warnings.push(validationIssue(
+            'impractical_chord_span',
+            '和弦本身要求超出初学者舒适范围的跨度',
+            eventIndex,
+            noteIndex,
+            { fingers, pitches: notes.map(getPitch) },
+          ));
+        }
+      }
+    }
+  }
+
+  for (let eventIndex = 1; eventIndex < (events || []).length; eventIndex++) {
+    const previousNotes = events[eventIndex - 1].notes || [events[eventIndex - 1]];
+    const currentNotes = events[eventIndex].notes || [events[eventIndex]];
+    if (previousNotes.length !== 1 || currentNotes.length !== 1) continue;
+    const previousFinger = Number(previousNotes[0].finger);
+    const currentFinger = Number(currentNotes[0].finger);
+    if (![previousFinger, currentFinger].every(Number.isInteger)) continue;
+    const previousPitch = getPitch(previousNotes[0]);
+    const currentPitch = getPitch(currentNotes[0]);
+    const interval = Math.abs(currentPitch - previousPitch);
+
+    // 轮指训练会在同一个琴键上主动换指；这是合法技巧，不按“手指连奏跨度”判错。
+    if (previousPitch === currentPitch) continue;
+
+    if (previousFinger === currentFinger && interval <= 5) {
+      warnings.push(validationIssue(
+        'same_finger_nearby_notes',
+        '邻近异音连续使用同一手指',
+        eventIndex,
+        0,
+        { previousPitch, currentPitch, finger: currentFinger },
+      ));
+    }
+
+    const pairCost = spanDifficulty(
+      previousPitch,
+      previousFinger,
+      currentPitch,
+      currentFinger,
+      normalizedHand,
+    );
+    if (pairCost >= UNPLAYABLE_COST) {
+      errors.push(validationIssue(
+        'impractical_melodic_span',
+        '相邻旋律音的手指跨度超出实用范围',
+        eventIndex,
+        0,
+        { previousPitch, currentPitch, previousFinger, currentFinger },
+      ));
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    summary: {
+      eventCount: (events || []).length,
+      noteCount: (events || []).reduce(
+        (sum, event) => sum + (event.notes || [event]).length,
+        0,
+      ),
+      errorCount: errors.length,
+      warningCount: warnings.length,
+    },
+  };
+}
+
+module.exports = {
+  PRACTICAL_SPANS,
+  UNPLAYABLE_COST,
+  isBlackKey,
+  generateValidStates,
+  spanDifficulty,
+  calculateTransitionCost,
+  predictFingeringForEvents,
+  applyExplicitFingering,
+  validateFingeringForEvents,
+};
