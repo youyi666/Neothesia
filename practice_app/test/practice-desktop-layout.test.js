@@ -48,3 +48,22 @@ test('short landscape view removes the hidden finger-guide grid column', () => {
     /\.practice-score-layout\s*{\s*display:block;\s*width:100%;\s*margin-top:0;/,
   );
 });
+
+test('lesson score annotations stay inside the final measure boundary', () => {
+  assert.match(
+    html,
+    /const finalBarlineX = contentX \+ systemMeasures \* measureWidth;/,
+  );
+  assert.match(
+    html,
+    /finalBarlineX - noteRightSafety/,
+  );
+  assert.match(
+    html,
+    /const rightContentPadding = lessonMode \? 76 : 50;/,
+  );
+  assert.doesNotMatch(
+    html,
+    /const xForBeat = beat => Math\.min\(width - 32/,
+  );
+});

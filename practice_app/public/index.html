@@ -1287,8 +1287,14 @@ function drawStaff(svg, options) {
   }
 
   const beatWidth = measureWidth / beatsPerMeasure;
-  // 留出音符头、升号、指法框和当前指针的右侧安全区，避免最后一拍被 SVG 裁掉。
-  const xForBeat = beat => Math.min(width - 32, contentX + (beat - systemStart + 0.31) * beatWidth);
+  const finalBarlineX = contentX + systemMeasures * measureWidth;
+  const noteRightSafety = Math.max(22, Math.min(36, measureWidth * 0.16));
+  // Keep late-system notes inside the final barline. The old width-based clamp
+  // let dense annotations spill past the measure and cover the final notes.
+  const xForBeat = beat => Math.min(
+    finalBarlineX - noteRightSafety,
+    contentX + (beat - systemStart + 0.31) * beatWidth,
+  );
 
   for (const rest of rests) {
     if (rest.start >= systemStart - 0.001 && rest.start < systemEnd - 0.001) {
@@ -1333,12 +1339,11 @@ function buildStaffSvg(score, width, showNames, options = {}) {
     ? (compactLandscape ? (hasBass ? 220 : 132) : (hasBass ? 250 : 150))
     : (compactLandscape ? (hasBass ? 198 : 110) : (hasBass ? 222 : 122));
   // lessonMode 下要给和弦/双音等同一时刻多个指法框（最多按 3 音堆叠）留出空间，避免顶部被裁切。
-  const topPadding = lessonMode ? 48 : 8;
+  const topPadding = lessonMode ? 56 : 8;
   const viewWidth = Math.max(300, width);
   const viewHeight = topPadding + systemCount * systemHeight;
   const contentX = 78;
-  const rightContentPadding = 44;
-  const noteRightEdge = viewWidth - 32;
+  const rightContentPadding = lessonMode ? 76 : 50;
   const svg = svgEl('svg', {
     viewBox:`0 0 ${viewWidth} ${viewHeight}`,
     role:'img',
@@ -1405,8 +1410,13 @@ function buildStaffSvg(score, width, showNames, options = {}) {
       ? [right, left].filter(Boolean).flatMap(track => track.notes)
         .find(note => note.eventIndex === options.currentEventIndex && note.start >= systemStart - 0.001 && note.start < systemEnd - 0.001)
       : null;
+    const finalBarlineX = contentX + systemMeasures * measureWidth;
+    const pointerRightSafety = Math.max(22, Math.min(36, measureWidth * 0.16));
     const pointerX = currentNote
-      ? Math.min(noteRightEdge, contentX + (currentNote.start - systemStart + 0.31) * (measureWidth / beatsPerMeasure))
+      ? Math.min(
+        finalBarlineX - pointerRightSafety,
+        contentX + (currentNote.start - systemStart + 0.31) * (measureWidth / beatsPerMeasure),
+      )
       : null;
     if (pointerX != null) {
       svg.appendChild(svgEl('rect', {
