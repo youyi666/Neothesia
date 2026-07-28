@@ -41,8 +41,10 @@ practice_app/
 │  ├─ analyze.js           曲目分析：BPM/拍号/小节边界/音符事件合并（和弦不拆散）
 │  ├─ lesson-export.js     关卡切片导出：处理跨边界音符、延音踏板、加数拍
 │  ├─ course-store.js      课程/关卡生成与 JSON 持久化，含曲库自动预生成
+│  ├─ fingering-engine.js  左右手感知的整曲指法生成与人体工学规则校验
 │  ├─ neothesia-launcher.js 启动 Neothesia 并传入关卡 MIDI 路径
 │  └─ scoring.js           实时评分状态机（等待模式），Node 和浏览器共用同一份代码
+├─ tools/audit-fingering.cjs 全曲库指法一致性与可弹性审计
 ├─ courses/<course_id>/    每个课程的 course.json + 源 MIDI 副本 + 导出的关卡 MIDI
 ├─ data/settings.json      最近打开的文件等应用设置
 └─ test/                   node:test 单元测试
@@ -72,12 +74,18 @@ practice_app/
 ```bash
 cd practice_app
 node --test test/*.test.js
+node tools/audit-fingering.cjs
 ```
 
-46 个用例覆盖：MIDI 读写往返、和弦不被拆散、跨边界音符（提前按下/延后释放）、延音踏板与
+自动化用例覆盖：MIDI 读写往返、和弦不被拆散、跨边界音符（提前按下/延后释放）、延音踏板与
 program change 的状态延续、小节/拍号变化、课程默认生成去重（含长曲目阶段 C 的自适应扩展）、
 关卡解锁链、Neothesia 可执行文件定位、曲库自动预生成的幂等性、以及评分引擎的和弦判定/连击/
-左右手准确率/累计达标轮次、完整谱面高亮数据、星级结果的计算与持久化、启动器的服务身份检查。
+左右手准确率/累计达标轮次、完整谱面高亮数据、星级结果的计算与持久化、左右手音阶与穿指、
+专项训练显式指法、课节间指法稳定性、谱面与当前音提示一致性、启动器的服务身份检查。
+
+`audit-fingering.cjs` 会遍历所有课程和课节；缺指法、和弦交叉、不可弹跨度、同一音符在不同课节
+使用不同手指、谱面与当前音提示不一致都会让命令以非零状态退出。拇指落黑键、超出初学者舒适
+范围但曲目本身无法避免的高级和弦，只作为人工复核警告列出。
 
 **未纳入自动化测试、已手动验证的部分**：
 - 启动 Neothesia 弹出真实窗口并加载导出的关卡 MIDI（用真实曲目跑通过）。
