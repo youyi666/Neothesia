@@ -599,6 +599,13 @@ body { background:var(--bg); }
   width:min(100%,1160px);
   margin-top:26px;
 }
+#root[data-render-key^="practice:"] .hdr-shell,
+#root[data-render-key^="practice:"] .content-inner {
+  width:min(1600px,100%);
+}
+#root[data-render-key^="practice:"] .practice-score-layout {
+  width:100%;
+}
 .practice-finger-float { position:sticky; top:118px; min-width:0; }
 .practice-finger-guide { width:100%; margin:0; }
 .practice-finger-title { margin:0 0 6px 2px; color:var(--muted); font-size:10px; font-weight:800; }
@@ -626,7 +633,7 @@ body { background:var(--bg); }
   .score-mode-button { flex:1; padding-left:4px; padding-right:4px; }
 }
 
-@media (max-width:900px) {
+@media (max-width:1200px) {
   .practice-score-layout { display:flex; flex-direction:column; gap:8px; margin-top:0; }
   .practice-finger-float { position:static; order:1; width:100%; }
   .practice-score-main { order:2; }
