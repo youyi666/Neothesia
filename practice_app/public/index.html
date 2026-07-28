@@ -1532,12 +1532,11 @@ function renderPracticeScore(p) {
 
   const currentAnchor = mount.querySelector('.practice-current-anchor');
   const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
-  const previousSystem = p.lastScoreSystem;
-  p.lastScoreSystem = Number.isInteger(currentSystem) ? currentSystem : null;
-  if (currentAnchor && Number.isInteger(currentSystem) && previousSystem !== currentSystem) {
-    const systemSelector = `.practice-current-anchor[data-practice-system="${currentSystem}"]`;
-    requestAnimationFrame(() => scrollPracticeSystemIntoView(mount.querySelector(systemSelector)));
-  }
+  if (!currentAnchor || !Number.isInteger(currentSystem)) return;
+  p.lastScoreSystem = currentSystem;
+  // 每次都校验可见性，但只有越出安全区才真正改写 scrollTop。
+  // 这样既能在换行时跟谱，也能在用户滚动或控件聚焦后把当前音带回视口。
+  scrollPracticeSystemIntoView(currentAnchor);
 }
 
 function scrollPracticeSystemIntoView(anchor) {
@@ -1814,11 +1813,11 @@ function render() {
     </div>`;
   const nextScroller = root.querySelector('.content');
   // root.innerHTML 重建了滚动容器，先同步恢复用户刚才的位置；
-  // 下一帧再由 renderPracticeScore 处理跨系统的光标跟随。
+  // 随即同步重建谱面，避免 requestAnimationFrame 在连续输入或后台限流时留下空谱面。
   if (nextScroller) nextScroller.scrollTop = prevScrollTop;
   if (view === 'practice-session') {
-    // 练习页保留用户滚动位置；renderPracticeScore 只在当前谱面系统变化时定位。
-    requestAnimationFrame(() => renderPracticeScore(state.practice));
+    // 光标与当前事件在同一轮渲染内更新；只有真实换行时才重新定位。
+    renderPracticeScore(state.practice);
   }
 }
 
