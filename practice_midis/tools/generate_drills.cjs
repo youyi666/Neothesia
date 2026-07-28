@@ -10,7 +10,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { writeMidi, ROOT } = require("./midi_writer.js");
+const { writeMidi, ROOT, noteNumber } = require("./midi_writer.js");
 
 const Q = 1;
 const E = 0.5;
@@ -21,7 +21,32 @@ const drills = [];
 
 // items: [{ n: 'C4' | ['C4','G4'], d, v?, f: number | [number,...] }]
 // f 必须和 n 的顺序（含和弦内的低到高顺序）一一对应。
+function validateDrillFingering(id, items) {
+  for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+    const item = items[itemIndex];
+    const notes = Array.isArray(item.n) ? item.n : [item.n];
+    const fingers = Array.isArray(item.f) ? item.f : [item.f];
+    if (notes.length !== fingers.length) {
+      throw new Error(`${id} 第 ${itemIndex + 1} 组的音符数与指法数不一致`);
+    }
+    for (let noteIndex = 0; noteIndex < notes.length; noteIndex++) {
+      const finger = fingers[noteIndex];
+      if (!Number.isInteger(finger) || finger < 1 || finger > 5) {
+        throw new Error(`${id} 第 ${itemIndex + 1} 组包含非法指法：${finger}`);
+      }
+      const pitchClass = ((noteNumber(notes[noteIndex]) % 12) + 12) % 12;
+      if (finger === 1 && [1, 3, 6, 8, 10].includes(pitchClass)) {
+        throw new Error(`${id} 第 ${itemIndex + 1} 组让拇指按黑键：${notes[noteIndex]}`);
+      }
+      if (noteIndex > 0 && fingers[noteIndex - 1] >= finger) {
+        throw new Error(`${id} 第 ${itemIndex + 1} 组的右手和弦指法没有按音高递增`);
+      }
+    }
+  }
+}
+
 function addDrill(id, title, group, bpm, items) {
+  validateDrillFingering(id, items);
   const subdir = group === "fingering" ? "fingering" : "technique";
   const right = items.map((it) => ({ n: it.n, d: it.d, ...(it.v ? { v: it.v } : {}) }));
   const fingering = [];
@@ -103,15 +128,15 @@ addDrill("tech_scale_c_major", "音阶：C 大调", "technique", 70, [
   { n: "E4", d: Q, f: 3 }, { n: "D4", d: Q, f: 2 }, { n: "C4", d: Q, f: 1 },
 ]);
 
-// 半音阶：C4-C5 半音上下行，拇指(1)与食指(2)交替。
+// 半音阶：白键通常用拇指，黑键用中指；F/C 处用 2 指衔接，避免拇指按黑键。
 addDrill("tech_chromatic", "半音阶：C4-C5", "technique", 66, [
-  { n: "C4", d: E, f: 1 }, { n: "C#4", d: E, f: 2 }, { n: "D4", d: E, f: 1 }, { n: "D#4", d: E, f: 2 },
-  { n: "E4", d: E, f: 1 }, { n: "F4", d: E, f: 2 }, { n: "F#4", d: E, f: 1 }, { n: "G4", d: E, f: 2 },
-  { n: "G#4", d: E, f: 1 }, { n: "A4", d: E, f: 2 }, { n: "A#4", d: E, f: 1 }, { n: "B4", d: E, f: 2 },
-  { n: "C5", d: E, f: 1 },
-  { n: "B4", d: E, f: 2 }, { n: "A#4", d: E, f: 1 }, { n: "A4", d: E, f: 2 }, { n: "G#4", d: E, f: 1 },
-  { n: "G4", d: E, f: 2 }, { n: "F#4", d: E, f: 1 }, { n: "F4", d: E, f: 2 }, { n: "E4", d: E, f: 1 },
-  { n: "D#4", d: E, f: 2 }, { n: "D4", d: E, f: 1 }, { n: "C#4", d: E, f: 2 }, { n: "C4", d: E, f: 1 },
+  { n: "C4", d: E, f: 1 }, { n: "C#4", d: E, f: 3 }, { n: "D4", d: E, f: 1 }, { n: "D#4", d: E, f: 3 },
+  { n: "E4", d: E, f: 1 }, { n: "F4", d: E, f: 2 }, { n: "F#4", d: E, f: 3 }, { n: "G4", d: E, f: 1 },
+  { n: "G#4", d: E, f: 3 }, { n: "A4", d: E, f: 1 }, { n: "A#4", d: E, f: 3 }, { n: "B4", d: E, f: 1 },
+  { n: "C5", d: E, f: 2 },
+  { n: "B4", d: E, f: 1 }, { n: "A#4", d: E, f: 3 }, { n: "A4", d: E, f: 1 }, { n: "G#4", d: E, f: 3 },
+  { n: "G4", d: E, f: 1 }, { n: "F#4", d: E, f: 3 }, { n: "F4", d: E, f: 2 }, { n: "E4", d: E, f: 1 },
+  { n: "D#4", d: E, f: 3 }, { n: "D4", d: E, f: 1 }, { n: "C#4", d: E, f: 3 }, { n: "C4", d: E, f: 1 },
 ]);
 
 // 短琶音：C 大三和弦一个八度内分解。
