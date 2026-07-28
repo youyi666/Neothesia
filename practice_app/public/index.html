@@ -1524,8 +1524,9 @@ function renderPracticeScore(p) {
 
   const currentAnchor = mount.querySelector('.practice-current-anchor');
   const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
+  const previousSystem = p.lastScoreSystem;
   p.lastScoreSystem = Number.isInteger(currentSystem) ? currentSystem : null;
-  if (currentAnchor && Number.isInteger(currentSystem)) {
+  if (currentAnchor && Number.isInteger(currentSystem) && previousSystem !== currentSystem) {
     const systemSelector = `.practice-current-anchor[data-practice-system="${currentSystem}"]`;
     requestAnimationFrame(() => scrollPracticeSystemIntoView(mount.querySelector(systemSelector)));
   }
@@ -1804,10 +1805,6 @@ function render() {
       </div>
     </div>`;
   const nextScroller = root.querySelector('.content');
-  if (nextScroller) nextScroller.scrollTop = prevScrollTop;
-  if (view === 'practice-session') {
-    requestAnimationFrame(() => renderPracticeScore(state.practice));
-  }
   // root.innerHTML 重建了滚动容器，先同步恢复用户刚才的位置；
   // 下一帧再由 renderPracticeScore 处理跨系统的光标跟随。
   if (nextScroller) nextScroller.scrollTop = prevScrollTop;
