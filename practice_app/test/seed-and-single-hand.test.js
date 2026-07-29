@@ -93,6 +93,23 @@ test('lesson ranges never shrink within the same hand_mode phase (no "8 then bac
   }
 });
 
+test('long songs add 16-measure focus windows after the first 16 measures', () => {
+  const midi = buildLongSongMidi(105);
+  const analysis = analyzeSong(midi, { title: 'long song with tail' });
+  const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
+  const right = lessons.filter(l => l.stage === 'A' && l.hand_mode === 'right');
+  const ranges = right.map(l => [l.start_measure, l.end_measure]);
+  const indexOfRange = (start, end) => ranges.findIndex(([s, e]) => s === start && e === end);
+
+  assert.ok(indexOfRange(16, 32) >= 0, 'right hand should practice measures 17-32 before expanding');
+  assert.ok(indexOfRange(32, 48) >= 0, 'right hand should practice measures 33-48 before expanding');
+  assert.ok(indexOfRange(89, 105) >= 0, 'right hand should practice the final 16 measures');
+  assert.ok(
+    indexOfRange(16, 32) < indexOfRange(0, 32),
+    'the 17-32 focus window should come before the cumulative 1-32 lesson',
+  );
+});
+
 test('seedDefaultCourses creates a course per curated song and is idempotent', () => {
   const firstRun = store.seedDefaultCourses(MIDI_ROOT);
   assert.equal(firstRun.length, store.SEED_SONGS.length + store.loadDrillManifest(MIDI_ROOT).length);

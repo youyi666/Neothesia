@@ -236,6 +236,7 @@ function progressiveMeasureLessons(handMode, measureCount, speedBase, titlePrefi
   let step = 0;
   while (true) {
     const clippedEnd = Math.min(size, measureCount);
+    const lessonSpeed = Math.min(1, Math.round((speedBase + step * 0.05) * 100) / 100);
     const title = clippedEnd === 1 ? `${titlePrefix}第一小节` : `${titlePrefix}前 ${clippedEnd} 小节`;
     lessons.push({
       title,
@@ -243,8 +244,16 @@ function progressiveMeasureLessons(handMode, measureCount, speedBase, titlePrefi
       range_type: 'measure',
       start_measure: 0,
       end_measure: clippedEnd,
-      speed: Math.min(1, Math.round((speedBase + step * 0.05) * 100) / 100),
+      speed: lessonSpeed,
     });
+    if (clippedEnd === 16 && measureCount > 16) {
+      lessons.push(...focusedSixteenMeasureLessons(
+        handMode,
+        measureCount,
+        lessonSpeed,
+        titlePrefix,
+      ));
+    }
     if (clippedEnd >= measureCount) break;
     size *= 2;
     step++;
@@ -255,6 +264,30 @@ function progressiveMeasureLessons(handMode, measureCount, speedBase, titlePrefi
 // 阶段 C：不从头开始的选段巩固练习（避免"总是从第一小节开始练，效率较低"），
 // 只在曲子够长、能切出一段有意义的、不过小的片段时才生成，片段大小不追求递增，
 // 因为这是"巩固某一段"而不是"扩大范围"的延续。
+function focusedSixteenMeasureLessons(handMode, measureCount, speed, titlePrefix) {
+  const lessons = [];
+  const seen = new Set();
+  const addWindow = start => {
+    const end = Math.min(start + 16, measureCount);
+    if (end - start < 8) return;
+    const key = `${start}:${end}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    lessons.push({
+      title: `${titlePrefix}第 ${start + 1}-${end} 小节`,
+      hand_mode: handMode,
+      range_type: 'measure',
+      start_measure: start,
+      end_measure: end,
+      speed,
+    });
+  };
+
+  for (let start = 16; start + 16 <= measureCount; start += 16) addWindow(start);
+  if (measureCount > 32) addWindow(Math.max(16, measureCount - 16));
+  return lessons;
+}
+
 function spotCheckLessons(handMode, measureCount, speed, titlePrefix) {
   if (measureCount <= 4) return [];
   const mid = Math.floor(measureCount / 2);
@@ -860,11 +893,87 @@ function pickHandTracks(analysis) {
   return { right: right ? right.index : null, left: left ? left.index : null };
 }
 
+function focusedLessonId(handMode, startMeasure, endMeasure) {
+  return `lesson_${handMode}_${pad3(startMeasure + 1)}_${pad3(endMeasure)}`;
+}
+
+function handTitlePrefix(handMode) {
+  if (handMode === 'left') return '左手：';
+  if (handMode === 'both') return '双手：';
+  return '右手：';
+}
+
+function makeFocusedLesson(handMode, stage, startMeasure, endMeasure, speed) {
+  const runs = defaultRequiredRuns(stage);
+  return {
+    lesson_id: focusedLessonId(handMode, startMeasure, endMeasure),
+    title: `${handTitlePrefix(handMode)}第 ${startMeasure + 1}-${endMeasure} 小节`,
+    stage,
+    hand_mode: handMode,
+    range_type: 'measure',
+    start_measure: startMeasure,
+    end_measure: endMeasure,
+    speed,
+    practice_mode: 'wait',
+    pass_condition: {
+      consecutive_successes: 3,
+      minimum_accuracy: 0.9,
+      required_runs: runs,
+    },
+    required_runs: runs,
+    successful_runs: 0,
+    best_star_count: 0,
+    unlocked: false,
+    completed: false,
+  };
+}
+
+function backfillFocusedSixteenLessons(course) {
+  if (!course || course.measure_count <= 16 || !Array.isArray(course.lessons)) return 0;
+  let added = 0;
+  for (const anchor of [...course.lessons]) {
+    if (
+      anchor.range_type !== 'measure' ||
+      anchor.start_measure !== 0 ||
+      anchor.end_measure !== 16 ||
+      !['right', 'left', 'both'].includes(anchor.hand_mode)
+    ) continue;
+
+    const windows = focusedSixteenMeasureLessons(
+      anchor.hand_mode,
+      course.measure_count,
+      anchor.speed,
+      handTitlePrefix(anchor.hand_mode),
+    );
+    const existingRanges = new Set(course.lessons.map(lesson =>
+      `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_measure}:${lesson.end_measure}`));
+    const additions = windows
+      .filter(window => !existingRanges.has(`${anchor.hand_mode}:measure:${window.start_measure}:${window.end_measure}`))
+      .map(window => makeFocusedLesson(anchor.hand_mode, anchor.stage, window.start_measure, window.end_measure, anchor.speed));
+    if (!additions.length) continue;
+    const index = course.lessons.indexOf(anchor);
+    course.lessons.splice(index + 1, 0, ...additions);
+    added += additions.length;
+  }
+  return added;
+}
+
 function seedDefaultCourses(midiRoot) {
   const results = [];
   for (const song of SEED_SONGS) {
     if (fs.existsSync(coursePath(song.id))) {
-      results.push({ id: song.id, status: 'exists' });
+      try {
+        const course = loadCourse(song.id);
+        const added = backfillFocusedSixteenLessons(course);
+        if (added) {
+          saveCourse(song.id, course);
+          results.push({ id: song.id, status: 'updated', addedLessons: added });
+        } else {
+          results.push({ id: song.id, status: 'exists' });
+        }
+      } catch (e) {
+        results.push({ id: song.id, status: 'error', error: e.message });
+      }
       continue;
     }
     const absPath = path.join(midiRoot, song.midi);
