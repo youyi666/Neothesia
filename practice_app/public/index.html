@@ -1560,14 +1560,18 @@ function renderPracticeScore(p) {
   const currentAnchor = mount.querySelector('.practice-current-anchor');
   const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
   if (!currentAnchor || !Number.isInteger(currentSystem)) return;
+  const shouldFollowSystem = p.lastScoreSystem !== currentSystem;
+  currentAnchor.dataset.practiceFollow = shouldFollowSystem ? '1' : '0';
   p.lastScoreSystem = currentSystem;
-  // 每次都校验可见性，但只有越出安全区才真正改写 scrollTop。
-  // 这样既能在换行时跟谱，也能在用户滚动或控件聚焦后把当前音带回视口。
+  if (!shouldFollowSystem) return;
+  // 只在换到新谱行时定位。连续弹同一行时音高会上下变化，
+  // 如果每个音都改 scrollTop，页面就会一会上一会下地乱窜。
   scrollPracticeSystemIntoView(currentAnchor);
 }
 
 function scrollPracticeSystemIntoView(anchor) {
   if (!anchor) return;
+  if (anchor.dataset?.practiceFollow === '0') return;
   const content = anchor.closest('.content');
   if (!content) return;
   const anchorRect = anchor.getBoundingClientRect();

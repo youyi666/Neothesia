@@ -62,21 +62,45 @@ test('practice score checks cursor visibility without forgetting a temporarily m
 
   renderPracticeScore(practice);
   assert.equal(followedAnchors, 1, 'the initial staff system should be positioned once');
+  assert.equal(currentAnchor.dataset.practiceFollow, '1');
 
   renderPracticeScore(practice);
-  assert.equal(followedAnchors, 2, 'the same staff system should still have its visibility checked');
+  assert.equal(followedAnchors, 1, 'the same staff system should not rewrite scrollTop while playing');
+  assert.equal(currentAnchor.dataset.practiceFollow, '0');
 
   currentAnchor = null;
   renderPracticeScore(practice);
   assert.equal(practice.lastScoreSystem, 0, 'a missing anchor must not erase the last stable system');
-  assert.equal(followedAnchors, 2, 'a missing anchor must not schedule a new scroll');
+  assert.equal(followedAnchors, 1, 'a missing anchor must not schedule a new scroll');
 
   currentSystem = 1;
   currentAnchor = {
     dataset: { practiceSystem: String(currentSystem) },
   };
   renderPracticeScore(practice);
-  assert.equal(followedAnchors, 3, 'moving to the next staff system should check the new anchor');
+  assert.equal(followedAnchors, 2, 'moving to the next staff system should check the new anchor');
+  assert.equal(currentAnchor.dataset.practiceFollow, '1');
+});
+
+test('same-system score redraws do not move the page while playing', () => {
+  const source = functionSource('scrollPracticeSystemIntoView', 'renderScoreModeControls');
+  let writes = 0;
+  const content = {
+    get scrollTop() { return 120; },
+    set scrollTop(value) { writes += 1; },
+    scrollHeight: 1500,
+    clientHeight: 471,
+    getBoundingClientRect: () => ({ top: 64, bottom: 535, height: 471 }),
+  };
+  const anchor = {
+    dataset: { practiceFollow: '0' },
+    closest: selector => selector === '.content' ? content : null,
+    getBoundingClientRect: () => ({ top: 700, bottom: 700 }),
+  };
+  const scrollPracticeSystemIntoView = vm.runInNewContext(`(${source.trim()})`);
+
+  scrollPracticeSystemIntoView(anchor);
+  assert.equal(writes, 0, 'same-system redraws must not yank the page up or down');
 });
 
 test('cursor visibility check only writes scrollTop outside the safe zone', () => {
