@@ -110,6 +110,23 @@ test('long songs add 16-measure focus windows after the first 16 measures', () =
   );
 });
 
+test('long songs add 8-measure phrase windows before larger integration lessons', () => {
+  const midi = buildLongSongMidi(103);
+  const analysis = analyzeSong(midi, { title: 'long song phrase practice' });
+  const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
+  const right = lessons.filter(l => l.stage === 'A' && l.hand_mode === 'right');
+  const ranges = right.map(l => [l.start_measure, l.end_measure]);
+  const indexOfRange = (start, end) => ranges.findIndex(([s, e]) => s === start && e === end);
+
+  assert.ok(indexOfRange(8, 16) >= 0, 'right hand should practice measures 9-16 as a phrase');
+  assert.ok(indexOfRange(16, 24) >= 0, 'right hand should practice measures 17-24 as a phrase');
+  assert.ok(indexOfRange(95, 103) >= 0, 'right hand should practice the final 8-measure phrase');
+  assert.ok(
+    indexOfRange(8, 16) < indexOfRange(0, 16),
+    'the 9-16 phrase window should come before the cumulative 1-16 lesson',
+  );
+});
+
 test('seedDefaultCourses creates a course per curated song and is idempotent', () => {
   const firstRun = store.seedDefaultCourses(MIDI_ROOT);
   assert.equal(firstRun.length, store.SEED_SONGS.length + store.loadDrillManifest(MIDI_ROOT).length);

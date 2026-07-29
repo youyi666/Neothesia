@@ -246,6 +246,14 @@ function progressiveMeasureLessons(handMode, measureCount, speedBase, titlePrefi
       end_measure: clippedEnd,
       speed: lessonSpeed,
     });
+    if (clippedEnd === 8 && measureCount > 8) {
+      lessons.push(...focusedEightMeasureLessons(
+        handMode,
+        measureCount,
+        lessonSpeed,
+        titlePrefix,
+      ));
+    }
     if (clippedEnd === 16 && measureCount > 16) {
       lessons.push(...focusedSixteenMeasureLessons(
         handMode,
@@ -264,12 +272,21 @@ function progressiveMeasureLessons(handMode, measureCount, speedBase, titlePrefi
 // 阶段 C：不从头开始的选段巩固练习（避免"总是从第一小节开始练，效率较低"），
 // 只在曲子够长、能切出一段有意义的、不过小的片段时才生成，片段大小不追求递增，
 // 因为这是"巩固某一段"而不是"扩大范围"的延续。
+function focusedEightMeasureLessons(handMode, measureCount, speed, titlePrefix) {
+  return focusedMeasureWindowLessons(handMode, measureCount, speed, titlePrefix, 8);
+}
+
 function focusedSixteenMeasureLessons(handMode, measureCount, speed, titlePrefix) {
+  return focusedMeasureWindowLessons(handMode, measureCount, speed, titlePrefix, 16);
+}
+
+function focusedMeasureWindowLessons(handMode, measureCount, speed, titlePrefix, windowSize) {
+  const minWindowSize = Math.max(4, Math.floor(windowSize / 2));
   const lessons = [];
   const seen = new Set();
   const addWindow = start => {
-    const end = Math.min(start + 16, measureCount);
-    if (end - start < 8) return;
+    const end = Math.min(start + windowSize, measureCount);
+    if (end - start < minWindowSize) return;
     const key = `${start}:${end}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -283,8 +300,8 @@ function focusedSixteenMeasureLessons(handMode, measureCount, speed, titlePrefix
     });
   };
 
-  for (let start = 16; start + 16 <= measureCount; start += 16) addWindow(start);
-  if (measureCount > 32) addWindow(Math.max(16, measureCount - 16));
+  for (let start = windowSize; start + windowSize <= measureCount; start += windowSize) addWindow(start);
+  if (measureCount > windowSize * 2) addWindow(Math.max(windowSize, measureCount - windowSize));
   return lessons;
 }
 
@@ -928,23 +945,30 @@ function makeFocusedLesson(handMode, stage, startMeasure, endMeasure, speed) {
   };
 }
 
-function backfillFocusedSixteenLessons(course) {
-  if (!course || course.measure_count <= 16 || !Array.isArray(course.lessons)) return 0;
+function backfillFocusedWindowLessons(course) {
+  if (!course || course.measure_count <= 8 || !Array.isArray(course.lessons)) return 0;
   let added = 0;
   for (const anchor of [...course.lessons]) {
     if (
       anchor.range_type !== 'measure' ||
       anchor.start_measure !== 0 ||
-      anchor.end_measure !== 16 ||
+      ![8, 16].includes(anchor.end_measure) ||
       !['right', 'left', 'both'].includes(anchor.hand_mode)
     ) continue;
 
-    const windows = focusedSixteenMeasureLessons(
-      anchor.hand_mode,
-      course.measure_count,
-      anchor.speed,
-      handTitlePrefix(anchor.hand_mode),
-    );
+    const windows = anchor.end_measure === 8
+      ? focusedEightMeasureLessons(
+        anchor.hand_mode,
+        course.measure_count,
+        anchor.speed,
+        handTitlePrefix(anchor.hand_mode),
+      )
+      : focusedSixteenMeasureLessons(
+        anchor.hand_mode,
+        course.measure_count,
+        anchor.speed,
+        handTitlePrefix(anchor.hand_mode),
+      );
     const existingRanges = new Set(course.lessons.map(lesson =>
       `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_measure}:${lesson.end_measure}`));
     const additions = windows
@@ -964,7 +988,7 @@ function seedDefaultCourses(midiRoot) {
     if (fs.existsSync(coursePath(song.id))) {
       try {
         const course = loadCourse(song.id);
-        const added = backfillFocusedSixteenLessons(course);
+        const added = backfillFocusedWindowLessons(course);
         if (added) {
           saveCourse(song.id, course);
           results.push({ id: song.id, status: 'updated', addedLessons: added });
