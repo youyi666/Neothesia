@@ -132,10 +132,9 @@ function loadCourse(courseId, user = null) {
         sessions:         p ? (p.sessions || []) : [],
       });
     });
-    const done = course.lessons.filter(l => l.completed).length;
-    course.completion_rate = course.lessons.length ? done / course.lessons.length : 0;
+    normalizeCourseUnlocks(course);
   } else {
-    for (const lesson of course.lessons || []) normalizeLessonProgress(lesson);
+    normalizeCourseUnlocks(course);
   }
   return course;
 }
@@ -220,7 +219,25 @@ function successfulRunsForLesson(lesson) {
 function normalizeLessonProgress(lesson) {
   lesson.required_runs = requiredRunsForLesson(lesson);
   lesson.successful_runs = successfulRunsForLesson(lesson);
+  if (!lesson.completed && lesson.successful_runs >= lesson.required_runs) {
+    lesson.completed = true;
+  }
   return lesson;
+}
+
+function normalizeCourseUnlocks(course) {
+  if (!course || !Array.isArray(course.lessons) || !course.lessons.length) return course;
+  course.lessons.forEach(normalizeLessonProgress);
+  course.lessons[0].unlocked = true;
+  for (let i = 0; i < course.lessons.length - 1; i++) {
+    if (course.lessons[i].completed) {
+      course.lessons[i + 1].unlocked = true;
+    }
+  }
+  course.completion_rate = course.lessons.length
+    ? course.lessons.filter(l => l.completed).length / course.lessons.length
+    : 0;
+  return course;
 }
 
 // ── Default lesson generation (MVP 功能三: 阶段 A/B/C) ────────────────────

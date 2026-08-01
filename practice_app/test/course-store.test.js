@@ -13,6 +13,7 @@ const SOURCE_MIDI = path.join(__dirname, '..', '..', 'practice_midis', '02_two_h
 function cleanup() {
   const dir = path.join(store.COURSES_ROOT, TEST_COURSE_ID);
   fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(path.join(__dirname, '..', 'data', 'user_progress', '__test_unlock_user__'), { recursive: true, force: true });
 }
 
 test.after(cleanup);
@@ -67,6 +68,35 @@ test('setLessonCompleted marks a lesson done and unlocks the next one', () => {
   assert.equal(after.lessons.find(l => l.lesson_id === firstId).completed, true);
   assert.equal(after.lessons.find(l => l.lesson_id === secondId).unlocked, true);
   assert.ok(after.completion_rate > 0);
+});
+
+test('loadCourse repairs unlock chain after new lessons are inserted behind completed progress', () => {
+  const user = '__test_unlock_user__';
+  const course = store.loadCourse(TEST_COURSE_ID);
+  const firstId = course.lessons[0].lesson_id;
+  store.setLessonCompleted(TEST_COURSE_ID, firstId, true, user);
+
+  const coursePath = path.join(store.COURSES_ROOT, TEST_COURSE_ID, 'course.json');
+  const diskCourse = JSON.parse(fs.readFileSync(coursePath, 'utf8'));
+  const insertedLesson = {
+    ...diskCourse.lessons[1],
+    lesson_id: 'lesson_inserted_after_completed',
+    title: 'Inserted phrase after completed lesson',
+    unlocked: false,
+    completed: false,
+    successful_runs: 0,
+    sessions: [],
+  };
+  diskCourse.lessons.splice(1, 0, insertedLesson);
+  fs.writeFileSync(coursePath, JSON.stringify(diskCourse, null, 2), 'utf8');
+
+  const repaired = store.loadCourse(TEST_COURSE_ID, user);
+  assert.equal(repaired.lessons[0].completed, true);
+  assert.equal(
+    repaired.lessons.find(l => l.lesson_id === insertedLesson.lesson_id).unlocked,
+    true,
+    'a newly inserted lesson after a completed lesson should not stay locked',
+  );
 });
 
 test('addManualLesson appends a user-defined lesson (MVP 功能四)', () => {
