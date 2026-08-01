@@ -591,6 +591,41 @@ body { background:var(--bg); }
 }
 
 /* ── Stable score layout ── */
+#root[data-render-key^="practice:"] .content {
+  overflow:hidden;
+  padding:10px 18px;
+}
+#root[data-render-key^="practice:"] .content-inner {
+  height:100%;
+}
+#root[data-render-key^="practice:"] .practice-wrap {
+  height:100%;
+  min-height:0;
+  padding:0;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  align-items:stretch;
+}
+#root[data-render-key^="practice:"] .practice-lesson-meta {
+  width:100%;
+  min-height:30px;
+  margin:0 0 6px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto auto;
+  align-items:center;
+}
+#root[data-render-key^="practice:"] .practice-stage {
+  flex-wrap:nowrap;
+  overflow:hidden;
+  justify-content:flex-start;
+  min-width:0;
+  max-height:16px;
+}
+#root[data-render-key^="practice:"] .practice-dot {
+  flex:0 0 8px;
+  width:8px;
+  height:8px;
+}
 .practice-score-layout {
   display:grid;
   grid-template-columns:minmax(168px,190px) minmax(0,1fr);
@@ -605,6 +640,9 @@ body { background:var(--bg); }
 }
 #root[data-render-key^="practice:"] .practice-score-layout {
   width:100%;
+  height:100%;
+  min-height:0;
+  margin-top:0;
 }
 .practice-finger-float { position:sticky; top:118px; min-width:0; }
 .practice-finger-guide { width:100%; margin:0; }
@@ -616,6 +654,37 @@ body { background:var(--bg); }
 .practice-finger-key { margin-top:2px; font-size:10px; }
 .practice-sheet { width:min(100%,980px); }
 .practice-score-main, .practice-score-main .practice-sheet { width:100%; min-width:0; }
+#root[data-render-key^="practice:"] .practice-score-main,
+#root[data-render-key^="practice:"] .practice-sheet,
+#root[data-render-key^="practice:"] .score-paper,
+#root[data-render-key^="practice:"] .score-mount {
+  min-height:0;
+}
+#root[data-render-key^="practice:"] .practice-score-main {
+  height:100%;
+}
+#root[data-render-key^="practice:"] .practice-sheet {
+  height:100%;
+  margin:0;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+}
+#root[data-render-key^="practice:"] .lesson-score .score-paper {
+  padding:0 12px;
+  overflow:hidden;
+}
+#root[data-render-key^="practice:"] .lesson-score .score-mount {
+  height:100%;
+}
+#root[data-render-key^="practice:"] .lesson-score .score-mount svg {
+  width:100%;
+  height:100%;
+}
+#root[data-render-key^="practice:"] .practice-wrap.is-playing .pc-keyboard,
+#root[data-render-key^="practice:"] .practice-wrap.is-playing .practice-stats,
+#root[data-render-key^="practice:"] .practice-wrap.is-playing > .btn-row {
+  display:none;
+}
 .practice-sheet-head { align-items:center; padding:10px 14px; }
 .practice-sheet-title { display:flex; flex-direction:column; gap:3px; min-width:0; }
 .practice-sheet-title strong { font-size:14px; }
@@ -626,6 +695,15 @@ body { background:var(--bg); }
 .score-mode-button:focus-visible { outline:2px solid #9f84df; outline-offset:1px; }
 
 @media (max-width:720px) {
+  #root[data-render-key^="practice:"] .content { padding:6px 8px; }
+  #root[data-render-key^="practice:"] .practice-lesson-meta {
+    grid-template-columns:1fr auto;
+    gap:4px 8px;
+  }
+  #root[data-render-key^="practice:"] .practice-stage {
+    grid-column:1 / -1;
+    order:3;
+  }
   .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
   .practice-finger-card { min-height:60px; padding:7px 8px; }
   .practice-sheet-head { align-items:stretch; }
@@ -635,12 +713,16 @@ body { background:var(--bg); }
 
 @media (max-width:1200px) {
   .practice-score-layout { display:flex; flex-direction:column; gap:8px; margin-top:0; }
+  #root[data-render-key^="practice:"] .practice-score-layout { height:100%; }
   .practice-finger-float { position:static; order:1; width:100%; }
   .practice-score-main { order:2; }
   .practice-finger-list { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
 }
 
 @media (orientation:landscape) and (max-height:700px) {
+  #root[data-render-key^="practice:"] .hdr { height:44px; }
+  #root[data-render-key^="practice:"] .tab-bar { display:none; }
+  #root[data-render-key^="practice:"] .practice-lesson-meta { display:none; }
   .practice-score-layout { display:block; width:100%; margin-top:0; }
   .practice-finger-float { display:none; }
   .practice-sheet-head { padding:6px 10px; }
@@ -1339,25 +1421,52 @@ function drawStaff(svg, options) {
   }
 }
 
-function buildStaffSvg(score, width, showNames, options = {}) {
-  const lessonMode = options.lessonMode === true;
+function staffLayout(score, width, lessonMode = false) {
   const right = score.tracks.find(track => track.role === 'right') || score.tracks[0];
   const left = score.tracks.find(track => track.role === 'left');
   const hasBass = !!left;
   const beatsPerMeasure = score.numerator * (4 / score.denominator);
   const measureCount = Math.max(1, Math.ceil((score.totalBeats - 0.001) / beatsPerMeasure));
   const compactLandscape = window.innerWidth > window.innerHeight && window.innerHeight <= 600;
-  const measuresPerSystem = compactLandscape
-    ? (width >= 540 ? 3 : 2)
-    : (width < 520 ? 1 : width < 900 ? 2 : 3);
+  const measuresPerSystem = lessonMode
+    ? (compactLandscape
+      ? (width >= 900 ? 4 : width >= 540 ? 3 : 2)
+      : (width < 520 ? 1 : width < 900 ? 2 : width < 1280 ? 3 : 4))
+    : (compactLandscape
+      ? (width >= 540 ? 3 : 2)
+      : (width < 520 ? 1 : width < 900 ? 2 : 3));
   const systemCount = Math.ceil(measureCount / measuresPerSystem);
   const systemHeight = lessonMode
     ? (compactLandscape ? (hasBass ? 220 : 132) : (hasBass ? 250 : 150))
     : (compactLandscape ? (hasBass ? 198 : 110) : (hasBass ? 222 : 122));
+  return { right, left, hasBass, beatsPerMeasure, measureCount, compactLandscape, measuresPerSystem, systemCount, systemHeight };
+}
+
+function buildStaffSvg(score, width, showNames, options = {}) {
+  const lessonMode = options.lessonMode === true;
+  const {
+    right,
+    left,
+    hasBass,
+    beatsPerMeasure,
+    measureCount,
+    compactLandscape,
+    measuresPerSystem,
+    systemCount,
+    systemHeight,
+  } = staffLayout(score, width, lessonMode);
   // lessonMode 下要给和弦/双音等同一时刻多个指法框（最多按 3 音堆叠）留出空间，避免顶部被裁切。
   const topPadding = lessonMode ? 56 : 8;
+  const pageSystemStart = lessonMode && Number.isInteger(options.pageSystemStart)
+    ? Math.max(0, Math.min(systemCount - 1, options.pageSystemStart))
+    : 0;
+  const requestedPageSystemCount = lessonMode && Number.isInteger(options.pageSystemCount)
+    ? Math.max(1, options.pageSystemCount)
+    : systemCount;
+  const pageSystemEnd = Math.min(systemCount, pageSystemStart + requestedPageSystemCount);
+  const visibleSystemCount = Math.max(1, pageSystemEnd - pageSystemStart);
   const viewWidth = Math.max(300, width);
-  const viewHeight = topPadding + systemCount * systemHeight;
+  const viewHeight = topPadding + visibleSystemCount * systemHeight;
   const contentX = 78;
   const rightContentPadding = lessonMode ? 76 : 50;
   const svg = svgEl('svg', {
@@ -1371,12 +1480,13 @@ function buildStaffSvg(score, width, showNames, options = {}) {
   const rightRests = buildRests(right, score.totalBeats, beatsPerMeasure);
   const leftRests = left ? buildRests(left, score.totalBeats, beatsPerMeasure) : [];
 
-  for (let system = 0; system < systemCount; system++) {
+  for (let system = pageSystemStart; system < pageSystemEnd; system++) {
+    const displaySystem = system - pageSystemStart;
     const startMeasure = system * measuresPerSystem;
     const systemMeasures = Math.min(measuresPerSystem, measureCount - startMeasure);
     const systemStart = startMeasure * beatsPerMeasure;
     const systemEnd = (startMeasure + systemMeasures) * beatsPerMeasure;
-    const systemTop = topPadding + system * systemHeight;
+    const systemTop = topPadding + displaySystem * systemHeight;
     const trebleTop = systemTop + 18;
     const bassTop = trebleTop + (compactLandscape ? 92 : 104);
     const measureWidth = (viewWidth - contentX - rightContentPadding) / systemMeasures;
@@ -1413,7 +1523,7 @@ function buildStaffSvg(score, width, showNames, options = {}) {
       beatsPerMeasure,
       systemMeasures,
       systemIndex:system,
-      showTime:system === 0,
+      showTime:system === pageSystemStart,
       numerator:score.numerator,
       denominator:score.denominator,
       showNames,
@@ -1543,6 +1653,33 @@ function practiceScoreAnnotation(note, track, p) {
   return null;
 }
 
+function practiceScoreSystemForEvent(score, width, eventIndex) {
+  const layout = staffLayout(score, width, true);
+  if (!Number.isInteger(eventIndex)) return { ...layout, currentSystem:0 };
+  const currentNote = [layout.right, layout.left].filter(Boolean).flatMap(track => track.notes)
+    .find(note => note.eventIndex === eventIndex);
+  if (!currentNote) return { ...layout, currentSystem:0 };
+  const currentMeasure = Math.max(0, Math.floor(currentNote.start / layout.beatsPerMeasure));
+  const currentSystem = Math.max(0, Math.min(
+    layout.systemCount - 1,
+    Math.floor(currentMeasure / layout.measuresPerSystem),
+  ));
+  return { ...layout, currentSystem };
+}
+
+function practiceSystemsPerPage(layout) {
+  const availableHeight = Math.max(260, window.innerHeight - 190);
+  const ideal = Math.floor(availableHeight / layout.systemHeight);
+  const compactLandscape = window.innerWidth > window.innerHeight && window.innerHeight <= 700;
+  const maxSystems = compactLandscape ? 2 : 3;
+  return Math.max(1, Math.min(maxSystems, ideal || 1));
+}
+
+function practiceScorePageLabel(p) {
+  if (!p?.scorePageCount) return '分页谱面 · 当前页固定显示';
+  return `第 ${p.scorePage + 1} / ${p.scorePageCount} 页 · 每页 ${p.scoreSystemsPerPage} 行谱`;
+}
+
 function renderPracticeScore(p) {
   const mount = document.getElementById('practiceScoreMount');
   if (!mount || !p?.sheet?.score) return;
@@ -1550,23 +1687,25 @@ function renderPracticeScore(p) {
   const currentEventIndex = p.finished
     ? null
     : p.sheet.targetEventIndexes?.[p.session?.getEventIndex() ?? -1];
+  const layout = practiceScoreSystemForEvent(p.sheet.score, width, currentEventIndex);
+  const systemsPerPage = practiceSystemsPerPage(layout);
+  const page = Math.floor(layout.currentSystem / systemsPerPage);
+  const pageSystemStart = page * systemsPerPage;
+  p.scorePage = page;
+  p.scorePageCount = Math.max(1, Math.ceil(layout.systemCount / systemsPerPage));
+  p.scoreSystemsPerPage = systemsPerPage;
+  p.lastScoreSystem = layout.currentSystem;
   mount.replaceChildren(buildStaffSvg(p.sheet.score, width, false, {
     lessonMode:true,
     currentEventIndex,
+    pageSystemStart,
+    pageSystemCount:systemsPerPage,
     noteToneFor:note => practiceNoteTone(note, p),
     noteAnnotationFor:(note, track) => practiceScoreAnnotation(note, track, p),
   }));
 
-  const currentAnchor = mount.querySelector('.practice-current-anchor');
-  const currentSystem = currentAnchor ? Number(currentAnchor.dataset.practiceSystem) : null;
-  if (!currentAnchor || !Number.isInteger(currentSystem)) return;
-  const shouldFollowSystem = p.lastScoreSystem !== currentSystem;
-  currentAnchor.dataset.practiceFollow = shouldFollowSystem ? '1' : '0';
-  p.lastScoreSystem = currentSystem;
-  if (!shouldFollowSystem) return;
-  // 只在换到新谱行时定位。连续弹同一行时音高会上下变化，
-  // 如果每个音都改 scrollTop，页面就会一会上一会下地乱窜。
-  scrollPracticeSystemIntoView(currentAnchor);
+  const label = document.getElementById('practiceScorePageLabel');
+  if (label) label.textContent = practiceScorePageLabel(p);
 }
 
 function scrollPracticeSystemIntoView(anchor) {
@@ -1602,8 +1741,8 @@ function renderPracticeScorePanel(p) {
     <section class="practice-sheet lesson-score" aria-label="整曲练习谱面">
       <div class="practice-sheet-head">
         <div class="practice-sheet-title">
-          <strong>全曲谱面</strong>
-          <span>本关 ${p.events.length} 个事件已点亮 · 当前小节放大提示</span>
+          <strong>分页谱面</strong>
+          <span id="practiceScorePageLabel">${practiceScorePageLabel(p)} · 本关 ${p.events.length} 个事件已点亮</span>
         </div>
         <div class="score-mode-switch" role="group" aria-label="谱面标注模式">${renderScoreModeControls()}</div>
       </div>
@@ -2966,7 +3105,7 @@ function renderPracticeSession() {
   const runProgress = practiceRunProgress(p);
 
   return `
-    <div class="practice-wrap">
+    <div class="practice-wrap is-playing">
       ${state.practiceTimeWarning ? `
         <div class="practice-overtime-banner">
           ⏰ 已连续练习超过 20 分钟，建议今天先休息，明天再来效果更好！
