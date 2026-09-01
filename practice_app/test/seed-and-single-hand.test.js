@@ -63,67 +63,70 @@ test('generateDefaultLessons does not create an empty first-measure hand lesson'
   );
 });
 
-test('lesson ranges never shrink within the same hand_mode phase (no "8 then back to 2" regressions)', () => {
-  const midi = buildLongSongMidi(100);
-  const analysis = analyzeSong(midi, { title: 'long song' });
+// GitHub Issue #2 重构：双手曲目不再先把右手/左手各自练到全曲再第一次合双手，
+// 改成每 2 小节一组，当场走完"右手 -> 左手 -> 双手"闭环。下面三个用例替换了
+// 旧的"倍增关卡"断言（旧版本本身就是这次重构要移除的行为）。
+
+test('two-hand songs form a closed loop per measure group: right -> left -> both, not "all right hand first"', () => {
+  const midi = buildLongSongMidi(20);
+  const analysis = analyzeSong(midi, { title: 'closed loop song' });
   const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
 
-  // Within each stage+hand_mode group (a single continuous ramp), the practiced
-  // span (end_measure - start_measure) must be non-decreasing from lesson to
-  // lesson - that is the property the user complained was violated (jumping
-  // from 8 notes down to 2-3 notes with no explanation).
-  for (const stage of ['A', 'B']) {
-    for (const hand of ['right', 'left', 'both']) {
-      const spans = lessons
-        .filter(l => l.stage === stage && l.hand_mode === hand)
-        .map(l => l.end_measure - l.start_measure);
-      for (let i = 1; i < spans.length; i++) {
-        assert.ok(spans[i] >= spans[i - 1],
-          `${stage}/${hand} span shrank: ${spans[i - 1]} -> ${spans[i]}`);
-      }
-    }
-  }
+  // 第 1-2 小节的双手关必须紧跟在同一组的右手/左手关之后出现，而不是排在
+  // "全曲右手都练完"之后 —— 这正是旧算法被投诉的地方。
+  const firstBothIndex = lessons.findIndex(l => l.hand_mode === 'both' && l.start_measure === 0 && l.end_measure === 2);
+  const lastFullSongRightIndex = lessons.findLastIndex(l =>
+    l.hand_mode === 'right' && l.start_measure === 0 && l.end_measure === analysis.measureCount);
+  assert.ok(firstBothIndex >= 0, 'expected an early both-hands lesson for measures 1-2');
+  assert.ok(
+    lastFullSongRightIndex === -1 || firstBothIndex < lastFullSongRightIndex,
+    '双手第 1-2 小节关必须在"右手弹完全曲"之前就出现，不能等右手全部学完才第一次合双手',
+  );
 
-  // Each phase (right alone, left alone, both together) should still ramp all
-  // the way up to the full song, not stall partway.
-  for (const hand of ['right', 'left', 'both']) {
-    const phaseLessons = lessons.filter(l => l.hand_mode === hand && (l.stage === 'A' || l.stage === 'B'));
-    const full = phaseLessons.find(l => l.start_measure === 0 && l.end_measure === analysis.measureCount);
-    assert.ok(full, `${hand} phase should end with a full-song lesson`);
-  }
+  // 每一组内部顺序：右手 -> 左手 -> 双手（都在同一个小节范围上）。
+  const firstGroupRight = lessons.findIndex(l => l.hand_mode === 'right' && l.start_measure === 0 && l.end_measure === 2);
+  const firstGroupLeft = lessons.findIndex(l => l.hand_mode === 'left' && l.start_measure === 0 && l.end_measure === 2);
+  assert.ok(firstGroupRight >= 0 && firstGroupLeft >= 0 && firstBothIndex >= 0);
+  assert.ok(firstGroupRight < firstGroupLeft, '同一组内应先右手后左手');
+  assert.ok(firstGroupLeft < firstBothIndex, '同一组内左手应在双手之前');
 });
 
-test('long songs add 16-measure focus windows after the first 16 measures', () => {
-  const midi = buildLongSongMidi(105);
-  const analysis = analyzeSong(midi, { title: 'long song with tail' });
+test('connection lessons stitch adjacent measure groups together', () => {
+  const midi = buildLongSongMidi(20);
+  const analysis = analyzeSong(midi, { title: 'connection song' });
   const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
-  const right = lessons.filter(l => l.stage === 'A' && l.hand_mode === 'right');
-  const ranges = right.map(l => [l.start_measure, l.end_measure]);
-  const indexOfRange = (start, end) => ranges.findIndex(([s, e]) => s === start && e === end);
 
-  assert.ok(indexOfRange(16, 32) >= 0, 'right hand should practice measures 17-32 before expanding');
-  assert.ok(indexOfRange(32, 48) >= 0, 'right hand should practice measures 33-48 before expanding');
-  assert.ok(indexOfRange(89, 105) >= 0, 'right hand should practice the final 16 measures');
+  const connections = lessons.filter(l => l.is_connection);
+  assert.ok(connections.length > 0, 'adjacent 2-measure groups should generate at least one connection lesson');
+  for (const lesson of connections) {
+    assert.equal(lesson.hand_mode, 'both');
+    assert.ok(lesson.end_measure - lesson.start_measure >= 2, '衔接关必须跨过组边界，不能只有一个小节');
+  }
+  // 第一组和第二组之间应该有一条衔接关（第2小节末尾接第3小节开头）。
   assert.ok(
-    indexOfRange(16, 32) < indexOfRange(0, 32),
-    'the 17-32 focus window should come before the cumulative 1-32 lesson',
+    connections.some(l => l.start_measure <= 1 && l.end_measure >= 3),
+    'expected a connection lesson spanning the boundary between the first two groups',
   );
 });
 
-test('long songs add 8-measure phrase windows before larger integration lessons', () => {
-  const midi = buildLongSongMidi(103);
-  const analysis = analyzeSong(midi, { title: 'long song phrase practice' });
+test('continuous-replay lessons cover from the start of the song and use practice_mode "continuous"', () => {
+  const midi = buildLongSongMidi(20);
+  const analysis = analyzeSong(midi, { title: 'continuous song' });
   const lessons = store.generateDefaultLessons(midi, analysis, { left: 1, right: 0 });
-  const right = lessons.filter(l => l.stage === 'A' && l.hand_mode === 'right');
-  const ranges = right.map(l => [l.start_measure, l.end_measure]);
-  const indexOfRange = (start, end) => ranges.findIndex(([s, e]) => s === start && e === end);
 
-  assert.ok(indexOfRange(8, 16) >= 0, 'right hand should practice measures 9-16 as a phrase');
-  assert.ok(indexOfRange(16, 24) >= 0, 'right hand should practice measures 17-24 as a phrase');
-  assert.ok(indexOfRange(95, 103) >= 0, 'right hand should practice the final 8-measure phrase');
+  const continuousLessons = lessons.filter(l => l.is_continuous);
+  assert.ok(continuousLessons.length > 0, 'expected at least one continuous-replay lesson');
+  for (const lesson of continuousLessons) {
+    assert.equal(lesson.hand_mode, 'both');
+    assert.equal(lesson.practice_mode, 'continuous');
+    assert.equal(lesson.start_measure, 0, '连续演奏关必须从第一小节开始，不能是片段');
+    // 不追求"完全不错"，允许放宽准确率/连击门槛，否则永远通不过。
+    assert.ok(lesson.pass_condition.minimum_accuracy < 0.9);
+  }
+  // 全曲结尾必须有一个连续演奏关，验收标准里"从头连续演奏到当前进度"才有终点。
   assert.ok(
-    indexOfRange(8, 16) < indexOfRange(0, 16),
-    'the 9-16 phrase window should come before the cumulative 1-16 lesson',
+    continuousLessons.some(l => l.end_measure === analysis.measureCount),
+    'expected a continuous-replay lesson covering the full song',
   );
 });
 

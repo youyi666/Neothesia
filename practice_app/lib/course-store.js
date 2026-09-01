@@ -240,6 +240,62 @@ function normalizeCourseUnlocks(course) {
   return course;
 }
 
+// ── 真实演奏能力摘要（GitHub Issue #2 首页反馈）───────────────────────────
+//
+// 把"完成了多少关"翻译成用户真正关心的问题："我现在真能连续双手弹到哪、
+// 多快、卡在哪"。只读派生数据，不落盘，每次 loadCourse 之后算一遍即可。
+function computeMasterySummary(course) {
+  const lessons = Array.isArray(course?.lessons) ? course.lessons : [];
+  const bothCompleted = lessons.filter(l => l.hand_mode === 'both' && l.completed && !l.is_continuous);
+  const continuousCompleted = lessons.filter(l => l.is_continuous && l.completed);
+
+  // "已稳定双手"：从第 0 小节开始、已完成的 both 关卡里能连续覆盖到的最远小节
+  // （中间不能有缺口，缺口之后的进度不算"稳定"，只能算"零星练过"）。
+  const masteredEndMeasure = furthestContiguousCoverage(bothCompleted);
+  // "当前可连续演奏"：同理，用连续演奏关（is_continuous）的完成情况。
+  const continuousEndMeasure = furthestContiguousCoverage(continuousCompleted);
+
+  const latestSpeedLesson = [...bothCompleted].sort((a, b) => (b.end_measure ?? 0) - (a.end_measure ?? 0))[0];
+  const currentSpeedRatio = latestSpeedLesson ? Number(latestSpeedLesson.speed) || null : null;
+
+  let longestContinuousRun = 0;
+  const breakPointCounts = new Map(); // measure range key -> 失败次数，标出最卡的点
+  for (const lesson of lessons) {
+    if (!lesson.is_continuous) continue;
+    for (const session of lesson.sessions || []) {
+      if (Number.isFinite(session.maxCombo)) longestContinuousRun = Math.max(longestContinuousRun, session.maxCombo);
+    }
+  }
+  for (const lesson of lessons) {
+    if (!lesson.is_continuous || lesson.completed) continue;
+    const fails = (lesson.sessions || []).filter(s => s.runPassed === false).length;
+    if (fails >= 2) {
+      breakPointCounts.set(`${lesson.start_measure}-${lesson.end_measure}`, fails);
+    }
+  }
+  const biggestBreakPoint = [...breakPointCounts.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+
+  const nextUnlocked = lessons.find(l => l.unlocked && !l.completed) || null;
+
+  return {
+    masteredRange: masteredEndMeasure > 0 ? { startMeasure: 0, endMeasure: masteredEndMeasure } : null,
+    continuousRange: continuousEndMeasure > 0 ? { startMeasure: 0, endMeasure: continuousEndMeasure } : null,
+    currentSpeedRatio,
+    longestContinuousRun,
+    biggestBreakPoint: biggestBreakPoint ? { range: biggestBreakPoint[0], failCount: biggestBreakPoint[1] } : null,
+    nextTask: nextUnlocked ? { lessonId: nextUnlocked.lesson_id, title: nextUnlocked.title } : null,
+  };
+}
+
+// both/continuous 关卡按小节起点排序后，从第 0 小节起找最远的"无缺口"覆盖终点。
+function furthestContiguousCoverage(lessons) {
+  const ranges = lessons
+    .filter(l => l.range_type === 'measure' && (l.start_measure ?? 0) === 0)
+    .map(l => Number(l.end_measure) || 0)
+    .filter(end => end > 0);
+  return ranges.length ? Math.max(...ranges) : 0;
+}
+
 // ── Default lesson generation (MVP 功能三: 阶段 A/B/C) ────────────────────
 //
 // 设计原则：同一 hand_mode 的关卡序列必须单调递增（小节数只增不减），不同 hand_mode
@@ -338,6 +394,101 @@ function spotCheckLessons(handMode, measureCount, speed, titlePrefix) {
   }];
 }
 
+// ── 小节闭环课程（GitHub Issue #2）───────────────────────────────────────
+//
+// 根问题：旧算法先把右手练到全曲、再把左手练到全曲，最后才进双手，用户在
+// "双手协调、片段连接、连续演奏"这些真正困难也真正重要的能力上被系统性地
+// 拖后。新算法把曲子切成很多 1～2 小节的小组，每一组当场走完
+// "右手 → 左手 → 双手" 的闭环，双手能力从第一组开始就在练，而不是全曲单手
+// 都会了才第一次双手合练。
+//
+// 每处理完一组，还会做两件旧算法完全没有的事：
+//   1. 生成"连接关"：专门练上一组结尾接这一组开头的那几个音，解决
+//      "每段都会、一连起来就断"的问题；
+//   2. 生成"连续演奏关"：从第一小节不停顿地弹到当前已学到的位置，
+//      practice_mode 用新的 continuous（见 lib/scoring.js），到点不管弹没弹对
+//      都会往下走，不会像 wait 模式一样允许用户停下来想。
+//
+// 单手曲目（无左手轨道）没有"双手协调"这个根问题，继续用旧的倍增关卡序列。
+const MEASURE_GROUP_SIZE = 2;
+
+function measureGroups(measureCount, groupSize = MEASURE_GROUP_SIZE) {
+  const groups = [];
+  for (let start = 0; start < measureCount; start += groupSize) {
+    groups.push({ start, end: Math.min(start + groupSize, measureCount) });
+  }
+  return groups;
+}
+
+function bothHandsSpeedForGroup(groupIndex) {
+  return Math.min(0.85, Math.round((0.55 + groupIndex * 0.02) * 100) / 100);
+}
+
+// 连续演奏关的检查点用倍增间隔（第1、2、4、8...组之后各插一次），既保证练习
+// 早期就有密集的"从头弹一遍"反馈，又不会让很长的曲子（比如103小节的青花瓷）
+// 生成几十个几乎重复的连续演奏关。
+function isContinuousCheckpoint(groupIndex, groupCount) {
+  const oneIndexed = groupIndex + 1;
+  if (oneIndexed === groupCount) return true; // 全曲总是有一个连续演奏关
+  let checkpoint = 1;
+  while (checkpoint < groupCount) {
+    if (checkpoint === oneIndexed) return true;
+    checkpoint *= 2;
+  }
+  return false;
+}
+
+function measureLoopLessons(measureCount) {
+  const groups = measureGroups(measureCount);
+  const lessons = [];
+  let previousGroup = null;
+
+  groups.forEach((group, groupIndex) => {
+    const label = `第 ${group.start + 1}-${group.end} 小节`;
+    const speed = bothHandsSpeedForGroup(groupIndex);
+
+    // 1) 右手 → 2) 左手 → 3) 双手：同一小组当场闭环，不再把整首曲子的单手
+    // 练完才第一次合双手。
+    lessons.push({
+      title: `右手：${label}`, hand_mode: 'right', range_type: 'measure',
+      start_measure: group.start, end_measure: group.end, speed: 0.5, stage: 'A',
+    });
+    lessons.push({
+      title: `左手：${label}`, hand_mode: 'left', range_type: 'measure',
+      start_measure: group.start, end_measure: group.end, speed: 0.5, stage: 'A',
+    });
+    lessons.push({
+      title: `双手：${label}`, hand_mode: 'both', range_type: 'measure',
+      start_measure: group.start, end_measure: group.end, speed, stage: 'B',
+    });
+
+    // 4) 连接关：只练上一组结尾接这一组开头的那一小段，专门解决"分段会、连起来断"。
+    if (previousGroup) {
+      const connStart = Math.max(0, previousGroup.end - 1);
+      const connEnd = Math.min(measureCount, group.start + 1);
+      if (connEnd - connStart >= 2) {
+        lessons.push({
+          title: `衔接：第 ${connStart + 1}-${connEnd} 小节`, hand_mode: 'both', range_type: 'measure',
+          start_measure: connStart, end_measure: connEnd, speed, stage: 'C', is_connection: true,
+        });
+      }
+    }
+
+    // 5) 连续演奏关：从头不停顿弹到当前学到的位置，练"连续演奏 + 错误恢复"。
+    if (isContinuousCheckpoint(groupIndex, groups.length)) {
+      lessons.push({
+        title: `连续演奏：第 1-${group.end} 小节`, hand_mode: 'both', range_type: 'measure',
+        start_measure: 0, end_measure: group.end, speed, stage: 'C',
+        is_continuous: true, practice_mode: 'continuous',
+      });
+    }
+
+    previousGroup = group;
+  });
+
+  return lessons;
+}
+
 /**
  * @param {object} midi - parsed MIDI (readMidi)
  * @param {object} analysis - analyzeSong(midi) result
@@ -355,16 +506,9 @@ function generateDefaultLessons(midi, analysis, assignment) {
   const raw = [];
 
   if (hasLeft) {
-    // 阶段 A：先右手单独，再左手单独，各自从第一小节起倍增到全曲
-    raw.push(...progressiveMeasureLessons('right', measureCount, 0.5, '右手：').map(l => ({ ...l, stage: 'A' })));
-    raw.push(...progressiveMeasureLessons('left', measureCount, 0.5, '左手：').map(l => ({ ...l, stage: 'A' })));
-    // 阶段 B：双手合练，同样从第一小节起倍增到全曲（换手是新技能，允许从头再来一次；
-    // 但双手阶段自身内部只会越练越长，不会中途缩小）
-    raw.push(...progressiveMeasureLessons('both', measureCount, 0.55, '双手：').map(l => ({ ...l, stage: 'B' })));
-    // 阶段 C：选段巩固练习
-    raw.push(...spotCheckLessons('both', measureCount, 0.65, '双手：').map(l => ({ ...l, stage: 'C' })));
+    raw.push(...measureLoopLessons(measureCount));
   } else {
-    // 单手曲目：只有一条连续递增的练习线，不再重复"阶段A/阶段B"两遍相同内容
+    // 单手曲目：没有"双手协调"这个根问题，继续用旧的倍增关卡序列。
     raw.push(...progressiveMeasureLessons('right', measureCount, 0.5, '右手：').map(l => ({ ...l, stage: 'A' })));
     raw.push(...spotCheckLessons('right', measureCount, 0.65, '右手：').map(l => ({ ...l, stage: 'C' })));
   }
@@ -387,35 +531,52 @@ function generateDefaultLessons(midi, analysis, assignment) {
   const seenGlobal = new Set();
   const deduped = raw.filter(lesson => {
     if (!lessonHasNotes(lesson)) return false;
-    const key = `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_measure}:${lesson.end_measure}`;
+    const kind = lesson.is_continuous ? 'continuous' : lesson.is_connection ? 'connection' : 'plain';
+    const key = `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_measure}:${lesson.end_measure}:${kind}`;
     if (seenGlobal.has(key)) return false;
     seenGlobal.add(key);
     return true;
   });
 
-  return deduped.map((lesson, index) => ({
-    lesson_id: `lesson_${pad3(index + 1)}`,
-    title: lesson.title,
-    stage: lesson.stage,
-    hand_mode: lesson.hand_mode,
-    range_type: lesson.range_type,
-    start_event: lesson.start_event,
-    end_event: lesson.end_event,
-    start_measure: lesson.start_measure,
-    end_measure: lesson.end_measure,
-    speed: lesson.speed,
-    practice_mode: 'wait',
-    pass_condition: {
-      consecutive_successes: 3,
-      minimum_accuracy: 0.9,
-      required_runs: defaultRequiredRuns(lesson.stage),
-    },
-    required_runs: defaultRequiredRuns(lesson.stage),
-    successful_runs: 0,
-    best_star_count: 0,
-    unlocked: index === 0,
-    completed: false,
-  }));
+  return deduped.map((lesson, index) => {
+    const requiredRuns = defaultRequiredRuns(lesson.stage);
+    // 连续演奏关不追求"完全不错"，追求"弹到底、错了也能接着弹"：连击门槛按
+    // 事件数打七折（短片段至少要求 1），达标线也放宽到 75% 准确率，否则等待
+    // 模式那套"3 连击 + 90% 准确率"会让连续演奏关几乎永远通不过。
+    const passCondition = lesson.is_continuous
+      ? {
+        consecutive_successes: 1,
+        minimum_accuracy: 0.75,
+        required_runs: requiredRuns,
+      }
+      : {
+        consecutive_successes: 3,
+        minimum_accuracy: 0.9,
+        required_runs: requiredRuns,
+      };
+    return {
+      lesson_id: `lesson_${pad3(index + 1)}`,
+      title: lesson.title,
+      stage: lesson.stage,
+      hand_mode: lesson.hand_mode,
+      range_type: lesson.range_type,
+      start_event: lesson.start_event,
+      end_event: lesson.end_event,
+      start_measure: lesson.start_measure,
+      end_measure: lesson.end_measure,
+      speed: lesson.speed,
+      practice_mode: lesson.practice_mode || 'wait',
+      practice_phase: lesson.practice_mode === 'continuous' ? 'continuous' : 'wait',
+      is_connection: !!lesson.is_connection,
+      is_continuous: !!lesson.is_continuous,
+      pass_condition: passCondition,
+      required_runs: requiredRuns,
+      successful_runs: 0,
+      best_star_count: 0,
+      unlocked: index === 0,
+      completed: false,
+    };
+  });
 }
 
 // ── Course lifecycle ──────────────────────────────────────────────────────
@@ -845,6 +1006,12 @@ function getLessonPracticeData(courseId, lessonId, options = {}) {
   return {
     events: serializeLessonEvents(slice),
     fingeringDiagnostics,
+    // 连续演奏模式（lib/scoring.js createContinuousModeSession）需要按曲速给
+    // 每个事件算到期时间，前端拿不到 midi.ticksPerQuarter，所以在这里透传。
+    // effectiveBpm 已经乘上课节自己的 speed（慢速练习），不是曲谱原速。
+    practiceMode: lesson.practice_mode || 'wait',
+    ticksPerQuarter: midi.ticksPerQuarter,
+    effectiveBpm: Math.max(1, Math.round(analysis.bpm * (Number(lesson.speed) || 1))),
     sheet: {
       targetEventIndexes: slice.map(event => event.index),
       score: {
@@ -1109,4 +1276,5 @@ module.exports = {
   meetsPassCondition,
   requiredRunsForLesson,
   successfulRunsForLesson,
+  computeMasterySummary,
 };

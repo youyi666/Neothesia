@@ -178,7 +178,10 @@ async function handleApi(req, res, requestPath, url) {
   const courseMatch = requestPath.match(/^\/api\/courses\/([^/]+)$/);
   if (courseMatch && req.method === 'GET') {
     const user = url.searchParams.get('user') || null;
-    sendJson(res, 200, { course: store.loadCourse(decodeURIComponent(courseMatch[1]), user) });
+    const course = store.loadCourse(decodeURIComponent(courseMatch[1]), user);
+    // 首页/课程页反馈从"完成了多少关"改成"真会弹多少"（Issue #2），派生数据
+    // 不落盘，每次都按当前进度现算。
+    sendJson(res, 200, { course, mastery: store.computeMasterySummary(course) });
     return true;
   }
 

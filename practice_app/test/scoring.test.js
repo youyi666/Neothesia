@@ -1,10 +1,15 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWaitModeSession } = require('../lib/scoring.js');
+const { createWaitModeSession, createContinuousModeSession } = require('../lib/scoring.js');
 
 function ev(index, notes) {
   return { index, notes: notes.map(([note, hand]) => ({ note, hand })) };
+}
+
+// 480 ticks/quarter, 120bpm => 500ms/quarter => 1 tick = 1.041666...ms
+function tickEv(index, tick, notes) {
+  return { index, tick, notes: notes.map(([note, hand]) => ({ note, hand })) };
 }
 
 test('a clean run through single-note events scores 100 with full combo', () => {
@@ -89,4 +94,55 @@ test('extra input after the session is already complete is ignored', () => {
   s.noteOn(61); // should be a no-op, not retroactively count as a mistake
   const after = s.getResult();
   assert.deepEqual(before, after);
+});
+
+// ── 连续演奏模式（Issue #2 "从头弹到当前进度"任务的评分引擎）────────────────
+
+test('continuous mode advances on schedule even without a tick() call, when notes land in time', () => {
+  const events = [
+    tickEv(0, 0, [[60, 'right']]),
+    tickEv(1, 480, [[62, 'right']]),
+    tickEv(2, 960, [[64, 'right']]),
+  ];
+  const s = createContinuousModeSession(events, { bpm: 120, ticksPerQuarter: 480, toleranceMs: 200, now: () => 0 });
+  s.noteOn(60, 0);
+  s.noteOn(62, 500);
+  s.noteOn(64, 1000);
+  const r = s.getResult();
+  assert.equal(r.isComplete, true);
+  assert.equal(r.correctEvents, 3);
+  assert.equal(r.wrongEvents, 0);
+  assert.equal(r.maxCombo, 3);
+  assert.equal(r.longestContinuousRun, 3);
+  assert.deepEqual(r.breakPoints, []);
+});
+
+test('continuous mode never blocks: a missed event is force-advanced by tick() past its deadline', () => {
+  const events = [
+    tickEv(0, 0, [[60, 'right']]),
+    tickEv(1, 480, [[62, 'right']]),
+    tickEv(2, 960, [[64, 'right']]),
+  ];
+  const s = createContinuousModeSession(events, { bpm: 120, ticksPerQuarter: 480, toleranceMs: 200 });
+  s.noteOn(60, 0); // event 0 hit
+  // user never presses the note for event 1 (deadline 500+200=700ms) - the clock moves on anyway
+  s.tick(800);
+  assert.equal(s.getEventIndex(), 2, 'should have force-advanced past the missed event, not gotten stuck waiting');
+  s.noteOn(64, 900); // catches up on event 2 in time
+  const r = s.getResult();
+  assert.equal(r.isComplete, true);
+  assert.equal(r.correctEvents, 2);
+  assert.equal(r.wrongEvents, 1);
+  assert.deepEqual(r.breakPoints, [1], 'the missed event should be recorded as a break point');
+  assert.equal(r.maxCombo, 1, 'combo resets across a break point, so a single miss cannot inflate the streak');
+});
+
+test('continuous mode getResult() shares the same field shape as wait mode (course-store reuses the same pass/star logic)', () => {
+  const events = [tickEv(0, 0, [[60, 'right']])];
+  const s = createContinuousModeSession(events, { bpm: 120, ticksPerQuarter: 480 });
+  s.noteOn(60, 0);
+  const r = s.getResult();
+  for (const key of ['totalEvents', 'correctEvents', 'wrongEvents', 'extraNotes', 'maxCombo', 'mistakeEventIndexes', 'accuracy', 'score', 'isComplete']) {
+    assert.ok(key in r, `missing ${key} on continuous mode result`);
+  }
 });

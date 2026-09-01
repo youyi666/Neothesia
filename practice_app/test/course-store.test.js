@@ -40,9 +40,13 @@ test('createCourse analyzes the MIDI and generates a default lesson plan', () =>
   assert.ok(course.lessons.slice(1).every(l => l.unlocked === false), 'later lessons should start locked');
   assert.ok(course.lessons.every(l => l.best_star_count === 0), 'new lessons should start without stars');
 
+  // 同一个小节范围现在可能既是"双手合练"关又是"连续演奏"关（Issue #2 的连续
+  // 演奏关卡就是刻意叠加在已练范围上的，不是新的音符范围），所以唯一性要按
+  // "范围 + 练习目的"判断，而不是只看范围。
   const seen = new Set();
   for (const lesson of course.lessons) {
-    const key = `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_event ?? lesson.start_measure}:${lesson.end_event ?? lesson.end_measure}`;
+    const kind = lesson.is_continuous ? 'continuous' : lesson.is_connection ? 'connection' : 'plain';
+    const key = `${lesson.hand_mode}:${lesson.range_type}:${lesson.start_event ?? lesson.start_measure}:${lesson.end_event ?? lesson.end_measure}:${kind}`;
     assert.ok(!seen.has(key), `duplicate lesson range generated: ${key}`);
     seen.add(key);
   }
