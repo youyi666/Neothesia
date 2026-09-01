@@ -2475,8 +2475,9 @@ async function openCourse(courseId) {
   state.view = 'course-detail';
   render();
   try {
-    const { course } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`);
+    const { course, mastery } = await apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`);
     state.activeCourse = course;
+    state.activeCourseMastery = mastery || null;
   } catch (e) {
     showToast('加载课程失败：' + e.message);
   }
@@ -2508,6 +2509,8 @@ function renderCourseDetail() {
             </div>
             <div class="lesson-badges">
               <span class="lesson-badge badge-hand-${l.hand_mode}">${HAND_LABEL[l.hand_mode]}</span>
+              ${l.is_connection ? '<span class="lesson-badge">🔗 衔接</span>' : ''}
+              ${l.is_continuous ? '<span class="lesson-badge">▶️ 连续演奏</span>' : ''}
               ${l.completed ? '<span class="lesson-badge badge-done">✓</span>' : ''}
             </div>
           </div>
@@ -2525,9 +2528,30 @@ function renderCourseDetail() {
       ${course.bpm} BPM · ${course.measure_count} 小节 · ${course.lessons.filter(l=>l.completed).length}/${course.lessons.length} 关卡完成
     </div>
     <div class="course-progress-track" style="margin-bottom:16px;"><div class="course-progress-fill" style="width:${courseProgress(course)}%"></div></div>
+    ${renderMasterySummary(state.activeCourseMastery)}
     ${sections}
     ${renderManualLessonForm(course)}
   `;
+}
+
+// 首页/课程页反馈从"完成了多少关"改成"真会弹多少"（Issue #2 验收标准）。
+function renderMasterySummary(mastery) {
+  if (!mastery) return '';
+  const rangeText = r => r ? `第 1-${r.endMeasure} 小节` : '还没有';
+  const speedText = mastery.currentSpeedRatio != null ? `原速 ${Math.round(mastery.currentSpeedRatio * 100)}%` : '—';
+  const breakText = mastery.biggestBreakPoint
+    ? `第 ${mastery.biggestBreakPoint.range.replace('-', '–')} 小节（失败 ${mastery.biggestBreakPoint.failCount} 次）`
+    : '暂无明显卡点';
+  return `
+    <div class="mastery-summary" style="margin-bottom:16px;padding:12px;border-radius:8px;background:var(--card-bg,rgba(127,127,127,.08));">
+      <div style="font-weight:600;margin-bottom:6px;">真实演奏能力</div>
+      <div class="lesson-meta">已稳定双手：${rangeText(mastery.masteredRange)}</div>
+      <div class="lesson-meta">当前可连续演奏：${rangeText(mastery.continuousRange)}</div>
+      <div class="lesson-meta">当前速度：${speedText}</div>
+      <div class="lesson-meta">最长连续演奏：${mastery.longestContinuousRun} 个事件</div>
+      <div class="lesson-meta">当前最大卡点：${breakText}</div>
+      ${mastery.nextTask ? `<div class="lesson-meta">今天任务：${escapeHtml(mastery.nextTask.title)}</div>` : ''}
+    </div>`;
 }
 
 // ── Manual lesson creation (MVP 功能四) ──
@@ -2707,6 +2731,7 @@ function practiceRunProgress(p) {
 async function openPracticeSession(courseId, lessonId, options = {}) {
   if (state.practice) {
     clearPracticeCountdown(state.practice);
+    stopContinuousClock(state.practice);
     disconnectPracticeMidi();
   }
   const inputMode = options.inputMode === 'computer-keyboard' ? 'computer-keyboard' : 'midi';
@@ -2731,8 +2756,12 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
     state.practice.events = practiceData.events;
     state.practice.sheet = practiceData.sheet;
     state.practice.sheet.eventIndexToLocal = new Map(practiceData.sheet.targetEventIndexes.map((index, localIndex) => [index, localIndex]));
-    state.practice.session = PracticeScoring.createWaitModeSession(practiceData.events);
+    state.practice.practiceMode = practiceData.practiceMode || 'wait';
+    state.practice.ticksPerQuarter = practiceData.ticksPerQuarter;
+    state.practice.effectiveBpm = practiceData.effectiveBpm;
+    state.practice.session = createPracticeSession(state.practice, practiceData.events);
     state.practice.result = state.practice.session.getResult();
+    startContinuousClockIfNeeded(state.practice);
     render();
     if (state.practice.inputMode === 'computer-keyboard') {
       state.practice.keyboardBaseNote = suggestedKeyboardBaseNote(practiceData.events);
@@ -2744,6 +2773,35 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
     if (state.practice) state.practice.loadError = e.message;
     render();
   }
+}
+
+// 连续演奏模式（practice_mode: 'continuous'，见 lib/scoring.js）需要一个"曲速时钟"
+// 按时把没弹对的事件强制前进，不能像等待模式一样只靠 MIDI 事件驱动。
+function createPracticeSession(p, events) {
+  if (p.practiceMode === 'continuous') {
+    return PracticeScoring.createContinuousModeSession(events, {
+      bpm: p.effectiveBpm || 120,
+      ticksPerQuarter: p.ticksPerQuarter || 480,
+    });
+  }
+  return PracticeScoring.createWaitModeSession(events);
+}
+
+function startContinuousClockIfNeeded(p) {
+  stopContinuousClock(p);
+  if (p.practiceMode !== 'continuous') return;
+  p.continuousClockTimer = setInterval(() => {
+    if (!p.session || p.finished || p.finishing) return;
+    p.session.tick(Date.now());
+    p.result = p.session.getResult();
+    if (p.result.isComplete) finishPracticeSession();
+    else render();
+  }, 100);
+}
+
+function stopContinuousClock(p) {
+  if (p?.continuousClockTimer) clearInterval(p.continuousClockTimer);
+  if (p) p.continuousClockTimer = null;
 }
 
 function clearPracticeCountdown(p = state.practice) {
@@ -2769,6 +2827,7 @@ function disconnectPracticeMidi() {
 function exitPracticeSession() {
   const courseId = state.practice?.courseId || state.activeCourseId;
   clearPracticeCountdown();
+  stopContinuousClock(state.practice);
   disconnectPracticeMidi();
   state.practice = null;
   state.view = 'course-detail';
@@ -2881,11 +2940,12 @@ function retryPracticeSession() {
   const p = state.practice;
   if (!p || !p.events) return;
   clearPracticeCountdown(p);
-  p.session = PracticeScoring.createWaitModeSession(p.events);
+  p.session = createPracticeSession(p, p.events);
   p.result = p.session.getResult();
   p.finished = null;
   p.finishing = false;
   p.keyboardPressedCodes.clear();
+  startContinuousClockIfNeeded(p);
   render();
 }
 
