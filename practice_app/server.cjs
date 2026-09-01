@@ -230,6 +230,18 @@ async function handleApi(req, res, requestPath, url) {
     return true;
   }
 
+  const measurePracticeDataMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/measures\/(\d+)\/practice-data$/);
+  if (measurePracticeDataMatch && req.method === 'GET') {
+    const courseId = decodeURIComponent(measurePracticeDataMatch[1]);
+    const measureIndex = Number(measurePracticeDataMatch[2]);
+    const handMode = url.searchParams.get('hand_mode') || 'both';
+    const data = store.getMeasurePracticeData(courseId, measureIndex, handMode, {
+      explicitFingering: DRILL_FINGERING_BY_ID.get(courseId),
+    });
+    sendJson(res, 200, data);
+    return true;
+  }
+
   const sessionsMatch = requestPath.match(/^\/api\/courses\/([^/]+)\/lessons\/([^/]+)\/sessions$/);
   if (sessionsMatch && req.method === 'POST') {
     const body = await readJsonBody(req);

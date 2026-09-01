@@ -375,6 +375,9 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .practice-target-hand { font-size:12px; }
 .practice-run-progress { color:var(--muted); font-size:12px; margin:-10px 0 14px; }
 .practice-run-progress strong { color:var(--primary); }
+.practice-toolbar { width:min(100%,900px); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+.practice-toolbar-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.practice-toolbar-status { color:var(--muted); font-size:12px; font-weight:600; }
 .practice-lesson-meta { width:min(100%,900px); display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; }
 .practice-lesson-meta .practice-progress { margin:0; font-weight:700; color:var(--text); }
 .practice-lesson-meta .practice-run-progress { margin:0; text-align:right; }
@@ -2526,7 +2529,61 @@ function renderCourseDetail() {
     </div>
     <div class="course-progress-track" style="margin-bottom:16px;"><div class="course-progress-fill" style="width:${courseProgress(course)}%"></div></div>
     ${sections}
+    ${renderMeasureLoopForm(course)}
     ${renderManualLessonForm(course)}
+  `;
+}
+
+// ── Single-measure loop practice (README "单小节循环练习") ──
+//
+// Deliberately not a lesson: no lesson_id, no persisted progress, no star
+// gating. Pick any measure straight from the course and drill it on repeat.
+// Uses GET /api/courses/:id/measures/:measureIndex/practice-data, which
+// mirrors getLessonPracticeData's payload shape via a throwaway lesson
+// object server-side (see course-store.js getMeasureEventSelection) - so
+// this reuses the exact same wait-mode scoring/scoring-panel/finger-guide/
+// staff-rendering code as the real 评分练习 flow below, just with a
+// different post-round transition (always loop, never gate on runs).
+
+function ensureLoopDraft(course) {
+  if (!state.loopDraft || state.loopDraft.courseId !== course.course_id) {
+    state.loopDraft = { courseId: course.course_id, measure: 1, hand_mode: 'both' };
+  }
+  return state.loopDraft;
+}
+
+function updateLoopDraftField(field, value) {
+  const d = state.loopDraft;
+  if (!d) return;
+  d[field] = field === 'measure' ? Number(value) : value;
+}
+
+async function startMeasureLoopPractice(courseId, measureCount) {
+  const d = state.loopDraft;
+  const measureIndex = Math.max(0, Math.min(measureCount - 1, Math.round(Number(d?.measure) || 1) - 1));
+  await openMeasureLoopPractice(courseId, measureIndex, d?.hand_mode || 'both');
+}
+
+function renderMeasureLoopForm(course) {
+  const d = ensureLoopDraft(course);
+  return `
+    <div class="stage-header">🔁 单小节循环练习</div>
+    <div class="lesson-meta" style="margin:-4px 0 10px;">不计入课程进度和星级，可反复练习任意一小节；进入后会先播放一遍示范，让你先听清节奏再弹。</div>
+    <div class="field">
+      <label class="field-label">小节（1–${course.measure_count}）</label>
+      <input type="number" min="1" max="${course.measure_count}" value="${d.measure}" oninput="updateLoopDraftField('measure', this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">手位</label>
+      <select onchange="updateLoopDraftField('hand_mode', this.value)">
+        <option value="both" ${d.hand_mode==='both'?'selected':''}>双手</option>
+        <option value="right" ${d.hand_mode==='right'?'selected':''}>右手</option>
+        <option value="left" ${d.hand_mode==='left'?'selected':''}>左手</option>
+      </select>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="startMeasureLoopPractice('${course.course_id}', ${course.measure_count})">🔁 开始循环练习</button>
+    </div>
   `;
 }
 
@@ -2713,7 +2770,8 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
   state.settings = { ...state.settings, lastCourseId: courseId, lastLessonId: lessonId };
   apiPost('/api/settings', { lastCourseId: courseId, lastLessonId: lessonId }).catch(() => {});
   state.practice = {
-    courseId, lessonId, lesson: null, events: null, sheet: null,
+    mode: 'lesson', courseId, lessonId, lesson: null, events: null, sheet: null,
+    loopEnabled: false, loopCount: 0,
     midiStatus: 'idle', midiInputs: [], midiAccess: null, midiStateTimer: null, inputMode,
     keyboardBaseNote: 60, keyboardPressedCodes: new Set(),
     session: null, result: null, finished: null, finishing: false, loadError: '',
@@ -2743,6 +2801,210 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
   } catch (e) {
     if (state.practice) state.practice.loadError = e.message;
     render();
+  }
+}
+
+// Loop-mode counterpart of openPracticeSession: same state shape (so every
+// shared render/MIDI/keyboard helper below keeps working untouched), but
+// courseId+measureIndex+handMode instead of a lessonId, no settings/resume
+// bookkeeping (this isn't part of the lesson resume flow), and an automatic
+// one-time audio preview once the target notes are known.
+async function openMeasureLoopPractice(courseId, measureIndex, handMode, options = {}) {
+  if (state.practice) {
+    clearPracticeCountdown(state.practice);
+    disconnectPracticeMidi();
+  }
+  const inputMode = options.inputMode === 'computer-keyboard' ? 'computer-keyboard' : 'midi';
+  state.practice = {
+    mode: 'loop', courseId, lessonId: null, measureIndex, handMode, measureCount: null,
+    loopEnabled: true, loopCount: 0,
+    lesson: null, events: null, sheet: null,
+    midiStatus: 'idle', midiInputs: [], midiAccess: null, midiStateTimer: null, inputMode,
+    keyboardBaseNote: 60, keyboardPressedCodes: new Set(),
+    session: null, result: null, finished: null, finishing: false, loadError: '',
+    countdownTimer: null, countdownInterval: null, countdownSeconds: null,
+  };
+  state.view = 'practice-session';
+  render();
+  try {
+    const [{ course }, practiceData] = await Promise.all([
+      apiGet(`/api/courses/${encodeURIComponent(courseId)}?user=${encodeURIComponent(state.currentUser)}`),
+      apiGet(`/api/courses/${encodeURIComponent(courseId)}/measures/${measureIndex}/practice-data?hand_mode=${encodeURIComponent(handMode)}`),
+    ]);
+    const p = state.practice;
+    if (!p || p.mode !== 'loop' || p.courseId !== courseId || p.measureIndex !== measureIndex) return; // navigated away while loading
+    p.measureCount = course.measure_count;
+    p.events = practiceData.events;
+    p.sheet = practiceData.sheet;
+    p.sheet.eventIndexToLocal = new Map(practiceData.sheet.targetEventIndexes.map((index, localIndex) => [index, localIndex]));
+    p.session = PracticeScoring.createWaitModeSession(practiceData.events);
+    p.result = p.session.getResult();
+    render();
+    playPracticePreview(p);
+    if (p.inputMode === 'computer-keyboard') {
+      p.keyboardBaseNote = suggestedKeyboardBaseNote(practiceData.events);
+      render();
+    } else {
+      connectMidiForPractice();
+    }
+  } catch (e) {
+    if (state.practice) state.practice.loadError = e.message;
+    render();
+  }
+}
+
+function switchLoopMeasure(delta) {
+  const p = state.practice;
+  if (!p || p.mode !== 'loop' || p.measureCount == null) return;
+  const nextIndex = Math.max(0, Math.min(p.measureCount - 1, p.measureIndex + delta));
+  if (nextIndex === p.measureIndex) return;
+  openMeasureLoopPractice(p.courseId, nextIndex, p.handMode, { inputMode: p.inputMode });
+}
+
+// Lets a regular lesson's 🎯 评分练习 screen be flipped into loop behaviour
+// on the fly (see finishPracticeSession) without having to pre-pick it from
+// the course-detail 单小节循环练习 form first - the whole point being "no
+// matter which practice screen I'm on, let me turn looping on/off right
+// here". Not offered for p.mode === 'loop' sessions: those have no lesson_id
+// to fall back to, so looping there is never optional.
+function toggleLoopEnabled() {
+  const p = state.practice;
+  if (!p || p.mode !== 'lesson') return;
+  p.loopEnabled = !p.loopEnabled;
+  render();
+}
+
+// ── Practice audio preview (Web Audio synth, no assets/dependencies) ──
+//
+// "播放一次音乐，能让人知道什么节奏" - needs to read as a piano, not a beep.
+// A single oscillator can't do that: what makes a struck string sound like
+// a piano (vs. an organ/synth) is (a) a rich harmonic series where higher
+// partials decay much faster than the fundamental, and (b) a very short
+// noisy "hammer" transient right at note-on. Both are faked here with
+// plain Web Audio nodes (additive synthesis + a generated noise burst) -
+// no sample files, still zero dependencies. Reads note timing straight from
+// p.sheet.score.tracks (beats, already computed by course-store.js as
+// tick/ticksPerQuarter), filtered down to just the notes that belong to the
+// current lesson/measure slice.
+
+let practiceAudioCtx = null;
+function getPracticeAudioContext() {
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  if (!practiceAudioCtx) practiceAudioCtx = new Ctor();
+  if (practiceAudioCtx.state === 'suspended') practiceAudioCtx.resume();
+  return practiceAudioCtx;
+}
+
+function midiNoteToFrequency(note) {
+  return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+function collectPracticePreviewNotes(p) {
+  const tracks = p?.sheet?.score?.tracks;
+  const localOf = p?.sheet?.eventIndexToLocal;
+  if (!Array.isArray(tracks) || !localOf) return [];
+  const notes = [];
+  for (const track of tracks) {
+    for (const note of track.notes) {
+      if (Number.isInteger(note.eventIndex) && localOf.has(note.eventIndex)) {
+        notes.push({ midi: note.midi, start: note.start, duration: note.duration });
+      }
+    }
+  }
+  return notes;
+}
+
+// [n, amplitude, decay-rate] per harmonic, relative to the fundamental.
+// Higher partials both quieter AND shorter-lived than the fundamental is
+// what reads as "struck string" rather than "sustained synth pad".
+const PIANO_HARMONICS = [
+  { n: 1, amp: 1.00, decay: 1.00 },
+  { n: 2, amp: 0.60, decay: 0.70 },
+  { n: 3, amp: 0.35, decay: 0.50 },
+  { n: 4, amp: 0.22, decay: 0.38 },
+  { n: 5, amp: 0.14, decay: 0.28 },
+  { n: 6, amp: 0.09, decay: 0.20 },
+];
+
+let pianoHammerNoiseBuffer = null;
+function getPianoHammerNoiseBuffer(ctx) {
+  if (pianoHammerNoiseBuffer && pianoHammerNoiseBuffer.sampleRate === ctx.sampleRate) return pianoHammerNoiseBuffer;
+  const length = Math.max(1, Math.floor(ctx.sampleRate * 0.02));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  pianoHammerNoiseBuffer = buffer;
+  return buffer;
+}
+
+function playPianoNote(ctx, master, freq, t0, dur) {
+  const noise = ctx.createBufferSource();
+  noise.buffer = getPianoHammerNoiseBuffer(ctx);
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.value = Math.min(5000, freq * 2.5);
+  noiseFilter.Q.value = 0.7;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.35, t0);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.02);
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(master);
+  noise.start(t0);
+  noise.stop(t0 + 0.025);
+
+  const nyquist = ctx.sampleRate / 2;
+  for (const { n, amp, decay } of PIANO_HARMONICS) {
+    const harmonicFreq = freq * n;
+    if (harmonicFreq >= nyquist) continue; // above Nyquist would just alias, not add tone
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = harmonicFreq;
+    const gain = ctx.createGain();
+    const peak = amp * 0.22;
+    const tail = Math.max(0.3, dur * decay + 0.15);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(peak, t0 + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0006, t0 + tail);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(t0);
+    osc.stop(t0 + tail + 0.05);
+  }
+}
+
+// Chords stack several playPianoNote() harmonic sets on the same instant -
+// a compressor on the shared bus keeps that from clipping instead of
+// having to hand-tune per-note gain for the worst-case chord width.
+function createPracticeMasterBus(ctx) {
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -18;
+  compressor.knee.value = 20;
+  compressor.ratio.value = 16;
+  compressor.attack.value = 0.002;
+  compressor.release.value = 0.2;
+  compressor.connect(ctx.destination);
+  const gain = ctx.createGain();
+  gain.gain.value = 0.85;
+  gain.connect(compressor);
+  return gain;
+}
+
+function playPracticePreview(p = state.practice) {
+  const notes = collectPracticePreviewNotes(p);
+  if (!notes.length) { showToast('这段没有可播放的音符'); return; }
+  const ctx = getPracticeAudioContext();
+  if (!ctx) { showToast('当前浏览器不支持音频预览'); return; }
+  const bpm = p.sheet.score.bpm || 100;
+  const secPerBeat = 60 / bpm;
+  const minStart = Math.min(...notes.map(n => n.start));
+  const master = createPracticeMasterBus(ctx);
+  const startAt = ctx.currentTime + 0.12;
+  for (const note of notes) {
+    const t0 = startAt + (note.start - minStart) * secPerBeat;
+    const dur = Math.max(0.2, note.duration * secPerBeat * 0.95);
+    playPianoNote(ctx, master, midiNoteToFrequency(note.midi), t0, dur);
   }
 }
 
@@ -2863,6 +3125,19 @@ async function finishPracticeSession() {
   if (!p || p.finishing) return;
   p.finishing = true;
   const result = p.result;
+  if (p.mode === 'loop' || p.loopEnabled) {
+    // Either there's no lesson_id to persist a session against (p.mode
+    // 'loop'), or the user flipped the on-screen 循环 toggle for this
+    // round - either way, skip the pass_condition/star-gating path and
+    // just show this round's result. The countdown below falls through to
+    // retryPracticeSession() since p.finished.completed is never set here.
+    p.loopCount = (p.loopCount || 0) + 1;
+    p.finished = { clean: result.mistakeEventIndexes.length === 0 && result.extraNotes === 0 };
+    p.finishing = false;
+    startPracticeCountdown(p);
+    render();
+    return;
+  }
   try {
     const { lesson, runPassed, completed, justCompleted, nextLesson, starCount, successfulRuns, requiredRuns } = await apiPost(
       `/api/courses/${encodeURIComponent(p.courseId)}/lessons/${encodeURIComponent(p.lessonId)}/sessions`,
@@ -3014,6 +3289,30 @@ const MIDI_STATUS_INFO = {
   denied: { icon: '❌', text: '没有获得 MIDI 权限，或连接失败。' },
 };
 
+// Persistent action bar rendered identically across every practice-session
+// sub-state (loading MIDI / mid-round / round-finished) - see index.html
+// history: previously the play/loop/prev-next buttons lived only inside
+// specific sub-states (mostly the transient "round finished" card), so they
+// visually moved around or vanished once the 3s auto-countdown fired. Now
+// they're computed once here and prepended to whichever branch renders.
+function renderPracticeToolbar(p) {
+  const loopToggleLabel = p.loopEnabled ? '🔁 循环练习中（点击关闭）' : '🔁 开启循环练习';
+  const statusLabel = p.mode === 'loop'
+    ? `🔁 第 ${p.measureIndex + 1} 小节 · 已循环 ${p.loopCount} 次`
+    : (p.loopEnabled ? `已循环 ${p.loopCount} 次 · 本轮成绩不计入课程进度` : '');
+  return `
+    <div class="practice-toolbar">
+      <div class="practice-toolbar-actions">
+        <button class="btn btn-secondary" onclick="playPracticePreview()">🔊 播放示范</button>
+        ${p.mode === 'lesson' ? `<button class="btn ${p.loopEnabled ? 'btn-primary' : 'btn-secondary'}" onclick="toggleLoopEnabled()">${loopToggleLabel}</button>` : ''}
+        ${p.mode === 'loop' ? `<button class="btn btn-secondary" ${p.measureIndex<=0?'disabled':''} onclick="switchLoopMeasure(-1)">⏮ 上一小节</button>` : ''}
+        ${p.mode === 'loop' ? `<button class="btn btn-secondary" ${p.measureCount!=null && p.measureIndex>=p.measureCount-1?'disabled':''} onclick="switchLoopMeasure(1)">下一小节 ⏭</button>` : ''}
+      </div>
+      ${statusLabel ? `<div class="practice-toolbar-status">${statusLabel}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderPracticeSession() {
   const p = state.practice;
   if (!p) return '';
@@ -3022,6 +3321,37 @@ function renderPracticeSession() {
   }
   if (!p.events) {
     return `<div class="empty-hint">加载中…</div>`;
+  }
+
+  const toolbar = renderPracticeToolbar(p);
+
+  if (p.finished && (p.mode === 'loop' || p.loopEnabled)) {
+    const r = p.result;
+    const label = p.mode === 'loop'
+      ? `🔁 第 ${p.measureIndex + 1} 小节 · 已循环 ${p.loopCount} 次`
+      : `🔁 ${escapeHtml(p.lesson?.title || '本关')} · 已循环 ${p.loopCount} 次`;
+    return `
+      <div class="practice-wrap">
+        ${toolbar}
+        <div class="result-card">
+          <div class="result-score">${r.score} 分</div>
+          <div class="result-pass ${p.finished.clean ? 'pass' : 'fail'}">${p.finished.clean ? '✓ 这一轮弹得很干净' : '本轮有错音/多弹，再来一遍会更熟'}</div>
+          <div class="result-next">${label}</div>
+          <div class="result-grid">
+            <div>${r.correctEvents} / ${r.totalEvents}<span>正确事件</span></div>
+            <div>${r.maxCombo}<span>最大连续正确</span></div>
+            <div>${r.extraNotes}<span>多弹/错音次数</span></div>
+            <div>${Math.round(r.durationMs/1000)} 秒<span>用时</span></div>
+          </div>
+          <div class="btn-row" style="justify-content:center;">
+            <button class="btn btn-primary" onclick="retryPracticeSession()">🔁 立即再来一次</button>
+            <button class="btn btn-secondary" onclick="exitPracticeSession()">${p.mode === 'loop' ? '退出循环练习' : '退出练习'}</button>
+          </div>
+          ${p.countdownSeconds != null ? `<div class="result-countdown">${p.countdownSeconds} 秒后自动重来</div>` : ''}
+        </div>
+        ${renderPracticeScorePanel(p)}
+      </div>
+    `;
   }
 
   if (p.finished) {
@@ -3047,6 +3377,7 @@ function renderPracticeSession() {
     ).join('');
     return `
       <div class="practice-wrap">
+        ${toolbar}
         <div class="result-card">
           <div class="result-score">${r.score} 分</div>
           <div class="result-stars" aria-label="本次 ${starCount} 星">${'★'.repeat(starCount)}${'☆'.repeat(3 - starCount)}</div>
@@ -3080,13 +3411,14 @@ function renderPracticeSession() {
     const retryable = p.midiStatus === 'no-devices' || p.midiStatus === 'denied';
     return `
       <div class="practice-wrap">
+        ${toolbar}
         <div class="midi-status-card" role="status">
           <div class="midi-status-icon">${info.icon}</div>
           <div>${escapeHtml(info.text)}</div>
           <div class="btn-row" style="justify-content:center;">
             ${retryable ? '<button class="btn btn-primary" onclick="connectMidiForPractice()">重试连接</button>' : ''}
             <button class="btn btn-primary" onclick="useComputerKeyboardForPractice()">使用电脑键盘评分</button>
-            <button class="btn btn-secondary" onclick="startPractice('${p.courseId}','${p.lessonId}'); exitPracticeSession();">改用 Neothesia（不计分）</button>
+            ${p.mode === 'loop' ? '' : `<button class="btn btn-secondary" onclick="startPractice('${p.courseId}','${p.lessonId}'); exitPracticeSession();">改用 Neothesia（不计分）</button>`}
           </div>
         </div>
         ${renderPracticeScorePanel(p)}
@@ -3102,10 +3434,11 @@ function renderPracticeSession() {
     else if (i === p.session.getEventIndex()) cls += ' current';
     return `<span class="${cls}"></span>`;
   }).join('');
-  const runProgress = practiceRunProgress(p);
+  const runProgress = (p.mode === 'loop' || p.loopEnabled) ? null : practiceRunProgress(p);
 
   return `
     <div class="practice-wrap is-playing">
+      ${toolbar}
       ${state.practiceTimeWarning ? `
         <div class="practice-overtime-banner">
           ⏰ 已连续练习超过 20 分钟，建议今天先休息，明天再来效果更好！
@@ -3113,7 +3446,7 @@ function renderPracticeSession() {
       <div class="practice-lesson-meta">
         <div class="practice-progress">第 ${p.session.getEventIndex() + 1} / ${p.events.length} 个音符事件</div>
         <div class="practice-stage">${dots}</div>
-        <div class="practice-run-progress">本关累计达标 <strong>${runProgress.successfulRuns} / ${runProgress.requiredRuns}</strong> 次</div>
+        ${runProgress ? `<div class="practice-run-progress">本关累计达标 <strong>${runProgress.successfulRuns} / ${runProgress.requiredRuns}</strong> 次</div>` : ''}
         ${state.practiceTimer.active && state.practiceTimer.startTime
           ? `<div class="practice-timer-live">⏱ ${escapeHtml(state.currentUser)} · ${formatPracticeTime(Math.floor((Date.now() - state.practiceTimer.startTime) / 1000))}</div>`
           : ''}
@@ -3132,7 +3465,9 @@ function renderPracticeSession() {
         <div class="practice-stat"><div class="practice-stat-val">${r.correctEvents}</div><div class="practice-stat-lbl">正确</div></div>
         <div class="practice-stat"><div class="practice-stat-val">${r.extraNotes}</div><div class="practice-stat-lbl">多弹/错音</div></div>
       </div>
-      <div class="btn-row"><button class="btn btn-secondary" onclick="exitPracticeSession()">退出练习</button></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="exitPracticeSession()">${p.mode === 'loop' ? '退出循环练习' : '退出练习'}</button>
+      </div>
     </div>
   `;
 }

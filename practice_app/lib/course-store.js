@@ -682,11 +682,10 @@ function resolveLessonRange(midi, lesson, assignment) {
   return { trackIndexes, startTick, endTick };
 }
 
-function getLessonEventSelection(courseId, lessonId) {
-  const course = loadCourse(courseId);
-  const lesson = course.lessons.find(l => l.lesson_id === lessonId);
-  if (!lesson) throw new Error(`Unknown lesson_id: ${lessonId}`);
-
+// Shared by real (persisted) lessons and virtual ones (e.g. single-measure
+// loop practice, which never gets written to course.json) - both just need
+// a {hand_mode, range_type, start_*, end_*} shaped object.
+function getEventSelectionForRange(courseId, course, lesson) {
   const sourcePath = path.join(courseDir(courseId), course.source_midi);
   const midi = readMidi(fs.readFileSync(sourcePath));
   // 全曲事件轴必须与课节的 hand_mode 无关，否则同一音符会因为“单手课/双手课”
@@ -720,6 +719,39 @@ function getLessonEventSelection(courseId, lessonId) {
 
   if (!slice.length) throw new Error('This lesson has no note events in range');
   return { course, lesson, midi, allEvents, slice };
+}
+
+function getLessonEventSelection(courseId, lessonId) {
+  const course = loadCourse(courseId);
+  const lesson = course.lessons.find(l => l.lesson_id === lessonId);
+  if (!lesson) throw new Error(`Unknown lesson_id: ${lessonId}`);
+  return getEventSelectionForRange(courseId, course, lesson);
+}
+
+const LOOP_HAND_MODES = ['both', 'left', 'right'];
+
+// Single-measure loop practice (see README "单小节循环练习"): the user picks
+// any measure directly from the course, no manual lesson needs to exist for
+// it first. Reuses the same range-resolution/event-grouping path as real
+// lessons via a throwaway lesson-shaped object, so it stays in lockstep with
+// fingering/scoring behaviour instead of drifting into a parallel code path.
+function getMeasureEventSelection(courseId, measureIndex, handMode) {
+  const course = loadCourse(courseId);
+  const index = Number(measureIndex);
+  if (!Number.isInteger(index) || index < 0 || index >= (course.measure_count || 0)) {
+    throw new Error(`Measure index out of range: ${measureIndex} (course has ${course.measure_count} measures)`);
+  }
+  const normalizedHand = LOOP_HAND_MODES.includes(handMode) ? handMode : 'both';
+  const lesson = {
+    lesson_id: `measure-loop-${index}`,
+    title: `第 ${index + 1} 小节循环练习`,
+    hand_mode: normalizedHand,
+    range_type: 'measure',
+    start_measure: index,
+    end_measure: index + 1,
+    stage: 'loop',
+  };
+  return getEventSelectionForRange(courseId, course, lesson);
 }
 
 function serializeLessonEvents(events) {
@@ -796,8 +828,9 @@ function applyCourseFingering(allEvents, ticksPerQuarter, explicitFingering = nu
 // The practice page needs the entire course score as well as the playable
 // event slice. Notes from the active lesson carry their global event index;
 // every other score note is intentionally left unmarked for grey rendering.
-function getLessonPracticeData(courseId, lessonId, options = {}) {
-  const { course, lesson, midi, allEvents, slice } = getLessonEventSelection(courseId, lessonId);
+// Shared by real lessons and the single-measure loop-practice selection.
+function buildPracticeDataFromSelection(selection, options = {}) {
+  const { course, midi, allEvents, slice } = selection;
   const fingeringDiagnostics = applyCourseFingering(
     allEvents,
     midi.ticksPerQuarter,
@@ -857,6 +890,16 @@ function getLessonPracticeData(courseId, lessonId, options = {}) {
       },
     },
   };
+}
+
+function getLessonPracticeData(courseId, lessonId, options = {}) {
+  return buildPracticeDataFromSelection(getLessonEventSelection(courseId, lessonId), options);
+}
+
+// Same payload shape as getLessonPracticeData, but for an ad-hoc single
+// measure that doesn't need a saved lesson - see README "单小节循环练习".
+function getMeasurePracticeData(courseId, measureIndex, handMode, options = {}) {
+  return buildPracticeDataFromSelection(getMeasureEventSelection(courseId, measureIndex, handMode), options);
 }
 
 function exportLessonFile(courseId, lessonId, opts = {}) {
@@ -1095,6 +1138,7 @@ module.exports = {
   resolveLessonRange,
   getLessonEvents,
   getLessonPracticeData,
+  getMeasurePracticeData,
   exportLessonFile,
   readSettings,
   updateSettings,
