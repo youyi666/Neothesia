@@ -59,6 +59,29 @@ function getTempoEvents(midi) {
   return tempos.length ? tempos : [{ tick: 0, microsecondsPerQuarter: 500000 }];
 }
 
+// CC64 = 延音踏板（sustain pedal）。Issue #4 第二片「踏板辅助」的数据源：
+// 只有 MIDI 里真的写了踏板控制器事件才会有结果——不是所有曲子的 MIDI 都
+// 标了踏板（例如目前公版库里的肖邦夜曲 Op.9 No.2 就没有），空数组对调用方
+// 是合法输入，不代表解析出错。0-63 按 GM 约定视为抬起，64-127 视为踩下；
+// 连续同状态的重复事件（部分制谱软件会冗余重发）合并成一次真正的状态切换。
+function extractPedalEvents(midi) {
+  const raw = [];
+  for (const track of midi.tracks) {
+    for (const event of track) {
+      if (event.type === 'controller' && event.controller === 64) {
+        raw.push({ tick: event.tick, down: event.value >= 64 });
+      }
+    }
+  }
+  raw.sort((a, b) => a.tick - b.tick);
+  const collapsed = [];
+  for (const event of raw) {
+    const last = collapsed[collapsed.length - 1];
+    if (!last || last.down !== event.down) collapsed.push(event);
+  }
+  return collapsed;
+}
+
 function getTimeSignatureEvents(midi) {
   const sigs = [];
   for (const track of midi.tracks) {
@@ -202,6 +225,7 @@ module.exports = {
   analyzeSong,
   getTempoEvents,
   getTimeSignatureEvents,
+  extractPedalEvents,
   ticksPerMeasure,
   songEndTick,
 };

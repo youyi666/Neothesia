@@ -1,5 +1,42 @@
 # 交接文档
 
+## 2026-09-01 更新：GitHub Issue #2 第一阶段（课程策略重构）
+
+- `generateDefaultLessons()`（`lib/course-store.js`）对双手曲目改成了"小节闭环课程"：
+  按 2 小节一组，每组当场走完 右手 → 左手 → 双手 的闭环，不再是"右手全曲 → 左手全曲 →
+  才第一次双手"。每组还会额外生成：
+  - 衔接关（`is_connection: true`）：练上一组结尾接这一组开头的那一小段；
+  - 连续演奏关（`is_continuous: true`, `practice_mode: 'continuous'`）：从第 1 小节
+    不停顿弹到当前已学到的位置，检查点按倍增间隔（1/2/4/8...组）插入，避免长曲子
+    （如103小节的《致爱丽丝》）生成几十个重复检查点。
+  单手曲目（无左手轨道）行为不变，仍用旧的倍增关卡序列。
+- `lib/scoring.js` 新增 `createContinuousModeSession()`：按曲速给每个事件一个到期
+  时间，调用方（浏览器 `setInterval` 每 100ms 调一次 `session.tick(Date.now())`）
+  到点就强制前进，不管弹没弹对，不会像 `createWaitModeSession` 一样允许用户停下来
+  想。`getResult()` 复用和等待模式完全相同的字段形状（`maxCombo`===最长连续演奏
+  事件数，`mistakeEventIndexes`===断点），所以 `course-store.js` 的
+  `recordPracticeResult`/`meetsPassCondition`/`calculateStarCount` 不需要为连续
+  模式另写一套判分逻辑。
+- `public/index.html` 按 `lesson.practice_mode` 选择创建哪种 session
+  （`createPracticeSession()`），连续模式下额外起一个 100ms 的 `setInterval`
+  （`startContinuousClockIfNeeded`/`stopContinuousClock`）驱动 `session.tick()`。
+- 新增 `store.computeMasterySummary(course)`：把"完成了多少关"翻译成
+  "已稳定双手第几小节 / 当前可连续演奏到第几小节 / 当前速度 / 最长连续演奏 /
+  最大卡点"，`GET /api/courses/:id` 现在多返回一个 `mastery` 字段，课程详情页
+  顶部会展示。这是首页反馈重构的第一步，还没有做成独立首页卡片。
+- **不影响现有用户进度**：`courses/`、`data/user_progress/` 都是 gitignore 掉的
+  本地数据，`seedDefaultCourses()` 跳过已存在的课程目录，只有新建课程才会用到
+  新算法；已有课程的 `lesson_id` 编号方案没变但具体切分变了，如果要让老用户吃到
+  新课程结构，需要用户自己决定是否删除对应 `courses/<id>/` 重新生成（会清空该
+  课程的练习进度），这个决定本次没有做迁移脚本，留给使用者手动判断。
+- 验收标准里"用《致爱丽丝》做真实回归测试"：本地跑过 `seedDefaultCourses` 生成
+  `fur_elise`（105 小节），确认能生成 右手→左手→双手→连续演奏 的完整闭环、
+  衔接关、以及覆盖全曲的连续演奏关，日志见本次提交说明，未做真实弹奏验收（需要
+  MIDI 键盘，本机不具备）。
+- **还没做的**（Issue #2 后续阶段，故意没有一次做完）：宽松节奏模式（模式二）、
+  自动难度升降级（连续失败自动降速/缩范围）、首页专门的"真实能力"卡片（目前只在
+  课程详情页顶部展示）、错误热图/专项练习自动生成。
+
 写给接手继续开发的 AI / 开发者。这份文档假设你没有看过之前的对话，只看这个仓库。
 
 ## 现状一句话总结

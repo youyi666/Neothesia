@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { readMidi, writeMidi } = require('../lib/midi-file.js');
-const { analyzeSong, extractTrackNotes, groupIntoEvents, computeMeasures } = require('../lib/analyze.js');
+const { analyzeSong, extractTrackNotes, groupIntoEvents, computeMeasures, extractPedalEvents } = require('../lib/analyze.js');
 
 const TWINKLE = path.join(__dirname, '..', '..', 'practice_midis', '02_two_hands_easy', '01_twinkle_twinkle_two_hands_easy.mid');
 
@@ -81,4 +81,48 @@ test('computeMeasures respects a time signature change mid-song', () => {
   const afterChange = measures.find(m => m.startTick === ticksPerQuarter * 8);
   assert.equal(afterChange.numerator, 3);
   assert.equal(afterChange.endTick - afterChange.startTick, ticksPerQuarter * 3);
+});
+
+test('extractPedalEvents reads CC64 sustain pedal events and ignores other controllers', () => {
+  const midi = {
+    ticksPerQuarter: 480,
+    tracks: [
+      [
+        { tick: 0, type: 'controller', channel: 0, controller: 7, value: 100 }, // volume, not pedal
+        { tick: 10, type: 'controller', channel: 0, controller: 64, value: 127 }, // down
+        { tick: 500, type: 'controller', channel: 0, controller: 64, value: 0 }, // up
+      ],
+    ],
+  };
+  const pedal = extractPedalEvents(midi);
+  assert.deepEqual(pedal, [
+    { tick: 10, down: true },
+    { tick: 500, down: false },
+  ]);
+});
+
+test('extractPedalEvents collapses redundant same-state CC64 resends and merges tracks in tick order', () => {
+  const midi = {
+    ticksPerQuarter: 480,
+    tracks: [
+      [
+        { tick: 0, type: 'controller', channel: 0, controller: 64, value: 100 }, // down
+        { tick: 5, type: 'controller', channel: 0, controller: 64, value: 90 }, // still down, redundant resend
+      ],
+      [
+        { tick: 2, type: 'controller', channel: 1, controller: 64, value: 70 }, // >=64 threshold: still "down"
+        { tick: 50, type: 'controller', channel: 1, controller: 64, value: 20 }, // up
+      ],
+    ],
+  };
+  const pedal = extractPedalEvents(midi);
+  assert.deepEqual(pedal, [
+    { tick: 0, down: true },
+    { tick: 50, down: false },
+  ]);
+});
+
+test('extractPedalEvents returns an empty array for a MIDI with no pedal markings (legal input, not an error)', () => {
+  const midi = readMidi(fs.readFileSync(TWINKLE));
+  assert.deepEqual(extractPedalEvents(midi), []);
 });

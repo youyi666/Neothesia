@@ -7,6 +7,7 @@
 | `07_public_domain_classics/bach_prelude_c_bwv846.mid` | J. S. Bach, Prelude in C major, BWV 846 | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=5 | Public Domain / No rights reserved |
 | `07_public_domain_classics/beethoven_fur_elise.mid` | L. v. Beethoven, Für Elise, WoO 59 | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931 | Public Domain |
 | `07_public_domain_classics/chopin_prelude_op28_no20.mid` | F. F. Chopin, Prelude Op. 28 No. 20 | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=472 | Public Domain / No rights reserved |
+| `07_public_domain_classics/chopin_nocturne_op9_no2.mid` | F. F. Chopin, Nocturne Op. 9 No. 2 (E♭ major) | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590 | Creative Commons Attribution-ShareAlike 3.0（原作曲家1849年去世，作品本身早已公版；这份 Mutopia 排版/MIDI 由贡献者以 CC BY-SA 3.0 授权，与本清单其它"No rights reserved"条目不同，转发/再发布时需保留署名） |
 | `07_public_domain_classics/schubert_ungarische_melodie.mid` | F. Schubert, Ungarische Melodie, D.817 | https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=758 | Public Domain / No rights reserved |
 
 通用授权说明：https://www.ibiblio.org/mutopia/legal.html

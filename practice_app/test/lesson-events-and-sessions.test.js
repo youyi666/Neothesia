@@ -67,8 +67,9 @@ test('getLessonEvents for a "both" lesson tags notes with their correct hand', (
 
 test('getLessonEvents for a measure-based lesson only includes events inside that measure range', () => {
   const course = store.loadCourse(TEST_COURSE_ID);
-  const lesson = course.lessons.find(l => l.range_type === 'measure' && l.hand_mode === 'right' && l.end_measure === 1);
-  assert.ok(lesson, 'expected "右手：第一小节"');
+  // 小节闭环课程（Issue #2）以 2 小节为最小组，不再有"第一小节单独一关"。
+  const lesson = course.lessons.find(l => l.range_type === 'measure' && l.hand_mode === 'right' && l.end_measure === 2);
+  assert.ok(lesson, 'expected "右手：第 1-2 小节"');
   const events = store.getLessonEvents(TEST_COURSE_ID, lesson.lesson_id);
   assert.ok(events.length > 0);
 });
@@ -164,10 +165,13 @@ test('playing a lesson perfectly twice records cumulative success before it unlo
 
 test('a short two-event lesson caps its combo requirement while still requiring its repeat count', () => {
   const course = store.loadCourse(TEST_COURSE_ID);
-  const lesson = course.lessons.find(l => l.hand_mode === 'left' && l.range_type === 'measure' && l.end_measure === 1);
-  assert.ok(lesson, 'expected the seeded "左手：第一小节" lesson');
+  const lesson = course.lessons.find(l => l.hand_mode === 'left' && l.range_type === 'measure' && l.end_measure === 2);
+  assert.ok(lesson, 'expected the seeded "左手：第 1-2 小节" lesson');
   const events = store.getLessonEvents(TEST_COURSE_ID, lesson.lesson_id);
-  assert.equal(events.length, 2, 'fixture must stay a two-event lesson');
+  // 小节闭环课程（Issue #2）以 2 小节为最小组，这个 fixture 现在是一个 4 事件
+  // 短课节（不再是旧版单小节的 2 事件），但下面测的东西没变：连击门槛按事件数
+  // 封顶，不会要求比这个课节本身还高的连击数。
+  assert.equal(events.length, 4, 'fixture must stay a short lesson');
 
   const session = createWaitModeSession(events);
   for (const event of events) {
@@ -176,7 +180,7 @@ test('a short two-event lesson caps its combo requirement while still requiring 
   }
   const result = session.getResult();
   assert.equal(result.score, 100);
-  assert.equal(result.maxCombo, 2);
+  assert.equal(result.maxCombo, 4);
 
   const firstRun = store.recordPracticeResult(TEST_COURSE_ID, lesson.lesson_id, result);
   assert.equal(firstRun.runPassed, true, 'a perfect two-event lesson should not require a third combo');
