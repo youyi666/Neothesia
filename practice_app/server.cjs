@@ -48,6 +48,7 @@ const MIME = {
   '.json': 'application/json',
   '.png':  'image/png',
   '.ico':  'image/x-icon',
+  '.svg':  'image/svg+xml',
 };
 const STATIC_CACHE_CONTROL = 'no-store, max-age=0, must-revalidate';
 
@@ -331,6 +332,27 @@ const server = http.createServer((req, res) => {
       .catch(err => {
         sendJson(res, 400, { error: err.message });
       });
+    return;
+  }
+
+  // Issue #4 后续阶段：夜曲左手手型练习原型（PR #5）从独立静态预览升级为接入
+  // 真实课程数据。它需要和主 API 同源才能直接 fetch /api/...，所以从这里的
+  // 主服务器直接托管，而不是它自己 package.json 里那个 python http.server
+  // （那个仍然保留，纯 UI 预览用假数据时还能单独跑）。
+  const NOCTURNE_LEFT_HAND_ROOT = path.join(__dirname, 'nocturne_left_hand', 'public');
+  if (requestPath === '/nocturne-left-hand' || requestPath.startsWith('/nocturne-left-hand/')) {
+    const rel = requestPath.slice('/nocturne-left-hand'.length).replace(/^\/+/, '') || 'index.html';
+    const safeRel = rel.replace(/\.\./g, '');
+    const filePath = path.join(NOCTURNE_LEFT_HAND_ROOT, safeRel);
+    const ext = path.extname(filePath);
+    fs.readFile(filePath, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, {
+        'Content-Type': MIME[ext] || 'text/plain',
+        'Cache-Control': STATIC_CACHE_CONTROL,
+      });
+      res.end(data);
+    });
     return;
   }
 

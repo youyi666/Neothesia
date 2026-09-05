@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111819"><meta name="description" content="Neothesia 夜曲左手练习室。拆开和弦，找到琴键，慢慢练会换位。">
+  <title>夜曲左手练习室 · Neothesia</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a href="/" class="brand" aria-label="Neothesia 练习室首页"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>neothesia<span class="brand-sub">PRACTICE STUDIO</span></span></a>
+    <div class="top-right"><span class="private-label"><svg viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>私人练习室</span><button id="help" class="icon-button" aria-label="使用说明">?</button></div>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div><div class="eyebrow"><span class="tiny-line"></span>慢练计划 <span>/</span> 左手专项</div><h1 id="page-title">肖邦夜曲<span class="title-dot"> · </span><span class="title-light">左手和弦</span></h1><p>一次只看一组音，慢慢找到手的位置。</p></div>
+      <div class="session-stat"><div class="stat-ring" id="progress-ring"><span id="progress-number">0<span>/ 4</span></span></div><div><strong id="session-title">加载中…</strong><small id="progress-caption">手动记录 · 不赶进度</small></div></div>
+    </section>
+    <section class="practice" aria-label="和弦练习区">
+      <div class="practice-toolbar"><div class="piece-label"><span class="music-icon">♫</span><div><strong>夜曲伴奏 · 手型预备练习</strong><small id="piece-subtitle-real">加载真实课程数据中…</small></div></div><div class="tempo-control"><label for="tempo">示范速度</label><input id="tempo" type="range" min="36" max="80" value="48" step="4"><output id="tempo-value" for="tempo">48</output><span>BPM</span></div></div>
+      <div class="practice-grid">
+        <div class="instrument-panel">
+          <div class="chord-heading"><div><div class="eyebrow" id="group-label">手型 01 / 04</div><div class="chord-name"><h2 id="chord-symbol">E♭</h2><div><strong id="chord-title">降 E 大三和弦</strong><span id="chord-subtitle">B♭2 · E♭3 · G3</span></div></div></div><span class="hand-tag">L <span>左手</span></span></div>
+          <div class="notes-row" id="notes-row" aria-label="当前音符和指法"></div>
+          <div class="listen-row"><span class="microcopy" id="note-caption">三个音，一起按下</span><div><button id="play-separate" class="text-button"><svg viewBox="0 0 24 24"><path d="M5 16v-3m7 3V8m7 8V4"/></svg>逐音听</button><button id="play-together" class="text-button"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>一起听</button></div></div>
+          <div class="view-controls"><div class="segmented" role="tablist" aria-label="音高显示方式"><button id="view-keyboard" class="selected" role="tab" aria-selected="true" aria-controls="keyboard-view">键盘引导</button><button id="view-score" role="tab" aria-selected="false" aria-controls="score-view">疏朗谱面</button></div><span class="view-hint" id="view-hint">与真实琴键一一对应</span></div>
+          <div id="keyboard-view" role="tabpanel" aria-labelledby="view-keyboard">
+            <div class="keyboard-map"><span id="position-label">中央 C 左侧 · 低音区</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
+            <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
+            <div class="keyboard-footer"><span><i class="legend-dot bass"></i>左手低音</span><span><i class="legend-dot chord"></i>左手和弦</span><span class="rh-legend"><i class="legend-dot melody"></i>右手旋律（本练习隐藏）</span><span class="number-legend">数字 = 手指</span></div>
+          </div>
+          <div id="score-view" hidden role="tabpanel" aria-labelledby="view-score"><div class="score-topline"><span>低音谱号 · 单组放大</span><span>音高对照，非节奏谱</span></div><div id="score"></div><p class="score-note">只呈现当前音组。点音符或上方音名，可对照试听。</p></div>
+          <div class="action-insight"><span class="insight-icon">↗</span><div><strong id="move-title">先找到手型，再连接低音</strong><p id="move-text">先把 5、3、1 指轻放在标记的琴键上，不急着弹。</p></div></div>
+        </div>
+        <aside class="coach-panel" aria-label="逐步动作引导">
+          <div class="coach-top"><span class="eyebrow">你的下一步</span><span id="phase-count">01 / 04</span></div>
+          <h3 id="coach-title">先把手型放好</h3><p id="coach-copy">看清这三个落点，让手自然展开。</p>
+          <div class="hand-illustration" aria-label="左手指法示意，从小指 5 到拇指 1">
+            <svg viewBox="0 0 280 192" id="hand-svg"><defs><linearGradient id="hand-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3e454a" stop-opacity=".75"/><stop offset="1" stop-color="#262f31" stop-opacity=".1"/></linearGradient></defs><path class="hand-shape" d="M81 181 C78 160 51 143 43 116 L30 79 C25 63 42 56 49 72 L65 101 L53 47 C49 28 68 25 73 44 L86 90 L84 27 C83 8 104 7 106 26 L112 87 L119 34 C122 14 143 17 140 39 L137 106 L171 83 C190 70 200 88 186 101 L161 128 C155 151 150 165 151 182"/><path class="hand-crease" d="M77 123q33-13 58 4m-45 13q22-3 35 4m10-29q-13 22-8 47"/><g data-finger="5" transform="translate(38 52)"><circle r="14"/><text y="5">5</text></g><g data-finger="4" transform="translate(60 18)"><circle r="14"/><text y="5">4</text></g><g data-finger="3" transform="translate(96 6)"><circle r="14"/><text y="5">3</text></g><g data-finger="2" transform="translate(135 19)"><circle r="14"/><text y="5">2</text></g><g data-finger="1" transform="translate(193 75)"><circle r="14"/><text y="5">1</text></g><text class="hand-l" x="213" y="154">L</text></svg>
+            <span>左手手背视角 · 1 是拇指</span>
+          </div>
+          <ol class="phase-list" id="phase-list"></ol>
+          <div class="finger-adjust"><label for="fingering">建议指法</label><select id="fingering" aria-label="选择建议指法"></select></div>
+          <p class="comfort-note">以手掌舒适为准。够不到时先移手，别硬撑。</p>
+        </aside>
+      </div>
+      <div class="pedal-strip"><div class="pedal-label"><svg viewBox="0 0 32 24"><path d="M8 19 13 5q1-3 4-2l6 2q3 1 1 4l-9 12Z"/><path d="M4 22h23"/></svg><div><strong>踏板引导 <span id="pedal-badge">先不加踏板</span></strong><small id="pedal-description">先练准落点，再用延音连接换位。</small></div></div><button id="pedal-toggle" class="switch" role="switch" aria-checked="false" aria-label="启用踏板引导"><span></span></button></div>
+      <div class="pedal-detail" id="pedal-detail" hidden><div class="pedal-steps"><span><b>1</b>弹新低音</span><i>→</i><span><b>2</b>抬起旧踏板</span><i>→</i><span><b>3</b>随即踩下</span></div><p>换和声时，让旧声音清掉；同一和声内可保留延音。下面可试听“有 / 无踏板”的换位。</p><div class="pedal-actions"><button id="pedal-demo" class="text-button">▷ 试听踏板连接</button><button id="pedal-manual" class="small-button" aria-pressed="false">踏板已抬起 · 点按踩下</button></div><span class="pedal-state" id="pedal-state" role="status"></span></div>
+      <div class="transport"><div class="playback-controls"><button id="demo" class="round-play" aria-label="播放本组完整示范"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg></button><div><strong id="demo-label">听一遍完整动作</strong><small id="audio-status" role="status">低音 → 移手 → 和弦</small></div><button id="loop" class="icon-button loop-button" aria-pressed="false" aria-label="循环本组示范"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg></button></div><div class="advance-controls"><button id="previous" class="icon-button" aria-label="上一步">←</button><button id="next" class="primary-button">手型就位，练低音 <span>→</span></button></div></div>
+    </section>
+    <section class="journey" aria-label="手型练习进度"><div class="journey-heading"><h2>把几个落点，连成一小段。</h2><span id="journey-status">4 组手型 · 按自己的节奏</span></div><div class="group-list" id="group-list"></div></section>
+    <footer><span>慢一点，也是在前进。</span><div><span id="save-status">进度保存在此浏览器</span><button class="text-button" id="restart">重新练习</button></div></footer>
+  </main>
+</div>
+<dialog id="help-dialog"><button class="dialog-close icon-button" data-close aria-label="关闭说明">×</button><span class="eyebrow">PRACTICE NOTES</span><h2>让每一步，都知道怎么下手。</h2><p>点击音名或琴键试听；按“下一步”依次练手型、低音、换位和重复和弦。你可以在真实钢琴上跟练，然后手动推进。</p><ul><li><b>颜色标角色，数字标手指。</b>蓝色是左手低音，紫色是左手和弦，绿色预留右手旋律。1 是拇指，5 是小指。</li><li><b>同指换位分两次发生。</b>先松开旧琴键，再把整只手移到新区域；踏板可延续声音，不能让一个手指同时按两个相隔的键。</li><li><b>谱面只展示当前音组。</b>没有拥挤的全曲缩略谱，也不以左右位置表达演奏先后。</li><li><b>音符和指法来自真实课程数据。</b>从《肖邦：夜曲 Op.9 No.2》课程的 MIDI 里读取，指法由仓库已有的自动指法引擎生成（非人工复核，仅供参考）；但还没有接入你的 MIDI 键盘和真实评分，也不会写回课程进度——这里的进度只是手动练习记录，跟课程里的星级、达标次数是两套数据。</li></ul><p class="help-shortcuts">电脑快捷键：空格试听本组 · ← / → 上下步 · 1 / 2 / 3 试听当前音 · Esc 停止</p><p class="help-source">设计依据：<a href="https://github.com/youyi666/Neothesia/issues/4" target="_blank" rel="noreferrer">Neothesia Issue #4</a> · 踏板基础：<a href="https://hub.yamaha.com/keyboards/k-how-to/how-to-use-keyboard-pedals/" target="_blank" rel="noreferrer">Yamaha</a></p><button class="primary-button" data-close>开始慢练 <span>→</span></button></dialog>
+<dialog id="complete-dialog"><button class="dialog-close icon-button" data-close aria-label="关闭完成提示">×</button><span class="complete-mark">✓</span><span class="eyebrow">ONE SMALL STEP</span><h2 id="complete-title">这一轮手型，走完了。</h2><p>你已手动完成这轮练习。接下来可以回到最不顺的一组，把“低音 → 和弦”多连几遍。</p><p class="comfort-note">这里记录练习过程，不判定真实弹奏是否正确。</p><button class="primary-button" id="practice-again">再慢练一轮 <span>↻</span></button></dialog>
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="app.js"></script>
+</body></html>
