@@ -335,6 +335,10 @@ async function init(){
     HAS_PEDAL_DATA=hasPedal;
     restoreSavedState();
     $('piece-subtitle-real').textContent=`${course.title} · 第 ${FROM_MEASURE+1}-${Math.min(TO_MEASURE,course.measure_count)} 小节 · 真实课程数据`;
+    // 大标题原来写死"肖邦夜曲"——?course= 换成别的曲子时必须跟着变，不然会
+    // 显示"贝多芬：致爱丽丝"的数据却顶着"肖邦夜曲"的标题，明显误导。
+    $('page-title-piece').textContent=course.title;
+    document.title=`${course.title} · 左手手型 · Neothesia`;
   }catch(e){
     showLoadError(e.message);
     return;
