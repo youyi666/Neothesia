@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111819"><meta name="description" content="Neothesia 左手手型练习室 · 选关。挑一首曲子，挑一段小节，开始慢练。">
+  <title>选关 · 左手手型练习室 · Neothesia</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <style>
+    .select-shell{padding:20px 0 60px}
+    .select-intro{padding:10px 0 18px}
+    .select-intro h1{margin:6px 0 3px;font-size:22px}
+    .select-intro p{margin:0;color:var(--muted);font-size:11px}
+    .course-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .course-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;background:#182120;border:1px solid #34423b;border-radius:9px;padding:15px 17px;min-height:88px}
+    .course-card:hover{border-color:#95ac89;background:#1e2b25}
+    .course-card strong{display:block;font-family:Georgia,serif;font-size:16px;font-weight:400;color:#d3dccd;line-height:1.3}
+    .course-card small{font-size:10px;color:#8fa58e}
+    .back-link{display:inline-flex;align-items:center;gap:6px;color:#b8c4bc;font-size:11px;margin-bottom:14px}
+    .back-link:hover{color:var(--text)}
+    .level-course-title{font-size:14px;color:var(--muted);margin:0 0 14px}
+    .level-course-title strong{color:var(--text);font-weight:500}
+    .empty-state{color:var(--muted);font-size:12px;padding:30px 0;text-align:center}
+    [hidden]{display:none!important}
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-left"><a href="/" class="brand" aria-label="Neothesia 练习室首页"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>neothesia<span class="brand-sub">PRACTICE STUDIO</span></span></a></div>
+    <div class="top-right"><span class="private-label"><svg viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>私人练习室</span></div>
+  </header>
+  <main class="select-shell">
+    <section class="select-intro">
+      <div class="eyebrow"><span class="tiny-line"></span>左手手型练习室 <span>/</span> 选关</div>
+      <h1>挑一首曲子，挑一段小节</h1>
+      <p>只列出已经有左手数据、能用这套"和弦手型 + MIDI 判分"练习的曲目。</p>
+    </section>
+    <section id="course-view">
+      <div id="course-list" class="course-list"></div>
+      <div id="course-empty" class="empty-state" hidden>加载课程列表失败，请确认 practice_app 服务器正在运行，然后刷新重试。</div>
+    </section>
+    <section id="level-view" hidden>
+      <a href="#" id="back-to-courses" class="back-link">← 返回曲目列表</a>
+      <p class="level-course-title">正在练习：<strong id="level-course-name"></strong> · <span id="level-course-meta"></span></p>
+      <div id="level-list" class="course-list"></div>
+    </section>
+  </main>
+</div>
+<script>
+const $=(id)=>document.getElementById(id);
+const CHUNK_SIZE=8;
+
+function chunksFor(measureCount){
+  const chunks=[];
+  for(let start=0;start<measureCount;start+=CHUNK_SIZE){
+    chunks.push({from:start,to:Math.min(start+CHUNK_SIZE,measureCount)});
+  }
+  return chunks;
+}
+
+function showCourseView(){
+  $('level-view').hidden=true;
+  $('course-view').hidden=false;
+  history.replaceState(null,'','select.html');
+}
+
+function showLevelView(course){
+  $('course-view').hidden=true;
+  $('level-view').hidden=false;
+  $('level-course-name').textContent=course.title;
+  $('level-course-meta').textContent=`${course.bpm} BPM · 共 ${course.measure_count} 小节`;
+  const chunks=chunksFor(course.measure_count);
+  $('level-list').innerHTML=chunks.map((c,i)=>`
+    <a class="course-card" href="index.html?course=${encodeURIComponent(course.course_id)}&from=${c.from}&to=${c.to}">
+      <strong>关 ${String(i+1).padStart(2,'0')}</strong>
+      <small>第 ${c.from+1}-${c.to} 小节</small>
+    </a>`).join('');
+  history.replaceState(null,'',`select.html?course=${encodeURIComponent(course.course_id)}`);
+}
+
+async function init(){
+  let courses;
+  try{
+    const res=await fetch('/api/courses');
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const list=Array.isArray(data)?data:data.courses||[];
+    courses=list.filter(c=>c.hand_tracks&&c.hand_tracks.left!=null);
+  }catch(e){
+    $('course-empty').hidden=false;
+    return;
+  }
+  if(!courses.length){
+    $('course-empty').hidden=false;
+    $('course-empty').textContent='暂时没有课程含左手数据，无法使用这套练习室。';
+    return;
+  }
+  $('course-list').innerHTML=courses.map(c=>`
+    <button class="course-card" data-course-id="${c.course_id}">
+      <strong>${c.title}</strong>
+      <small>${c.bpm} BPM · ${c.measure_count} 小节</small>
+    </button>`).join('');
+  $('course-list').addEventListener('click',e=>{
+    const btn=e.target.closest('[data-course-id]');
+    if(!btn) return;
+    const course=courses.find(c=>c.course_id===btn.dataset.courseId);
+    if(course) showLevelView(course);
+  });
+  $('back-to-courses').onclick=(e)=>{e.preventDefault();showCourseView();};
+
+  const preselect=new URLSearchParams(location.search).get('course');
+  if(preselect){
+    const course=courses.find(c=>c.course_id===preselect);
+    if(course) showLevelView(course);
+  }
+}
+init();
+</script>
+</body></html>

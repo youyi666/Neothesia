@@ -275,7 +275,7 @@ updateMidiStatusLabel();
 // 事件，不再逐阶段各开一个 session。没有时钟、没有到期时间——弹对哪一个
 // 事件就立刻前进到下一个，弹错不会卡住（等你弹对为止，不强制失败），完全
 // 由用户的真实节奏驱动，不会出现"弹对了却要等"的错觉。
-let continuousSession=null;
+let continuousSession=null,continuousLoop=false;
 
 function pseudoChordInfo(pitches){
   let symbol=pitch(pitches[0]),title;
@@ -304,9 +304,18 @@ function renderContinuous(){
   $('continuous-score-text').textContent=`正确 ${result.correctEvents} · 弹错 ${result.wrongEvents} · 连击 ${result.currentCombo}（最长 ${result.maxCombo}）`;
   $('group-label').textContent=`连续演奏 · 第 ${FROM_MEASURE+1}-${TO_MEASURE} 小节`;
   if(!event){
+    if(continuousLoop){
+      // 循环练习：完成一轮之后不停在"已完成"，直接重开一轮，方便反复弹熟
+      // 一整段而不用每次手动点"从头再来"。用 later() 而不是同步立刻重开，
+      // 让"✓ 弹完了"这个反馈至少能被看到一瞬间，不会显得像卡了一下。
+      later(()=>restartContinuousSession(),400);
+      $('chord-title').textContent='这一轮弹完了，循环练习中…';
+      $('chord-subtitle').textContent='马上从头开始下一轮。关掉循环按钮可以停在这里。';
+    }else{
+      $('chord-title').textContent='这段范围，连续弹完了';
+      $('chord-subtitle').textContent='点"从头再来"可以再弹一遍，或者打开循环按钮自动重来。';
+    }
     $('chord-symbol').textContent='✓';
-    $('chord-title').textContent='这段范围，连续弹完了';
-    $('chord-subtitle').textContent='点"从头再来"可以再弹一遍。';
     $('note-caption').textContent='已完成';
     $('play-feedback').textContent='✓ 全部弹完了';
     $('notes-row').innerHTML='';
@@ -352,6 +361,7 @@ function exitContinuousMode(){
 $('mode-step').onclick=exitContinuousMode;
 $('mode-continuous').onclick=enterContinuousMode;
 $('continuous-restart').onclick=restartContinuousSession;
+$('continuous-loop').onclick=()=>{continuousLoop=!continuousLoop;$('continuous-loop').setAttribute('aria-pressed',String(continuousLoop));announce(continuousLoop?'已开启循环练习，弹完一轮自动从头再来。':'已关闭循环练习。');};
 
 function setView(view){state.view=view;for(const v of ['keyboard','score']){$('view-'+v).classList.toggle('selected',v===view);$('view-'+v).setAttribute('aria-selected',String(v===view));$(v+'-view').hidden=v!==view;}$('view-hint').textContent=view==='keyboard'?'与真实琴键一一对应':'保持音高，不压缩整曲';if(view==='keyboard')centerKeyboard();}
 $('view-keyboard').onclick=()=>setView('keyboard');$('view-score').onclick=()=>setView('score');

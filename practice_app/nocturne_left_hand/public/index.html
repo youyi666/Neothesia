@@ -9,7 +9,7 @@
 <body>
 <div class="app-shell">
   <header class="topbar">
-    <a href="/" class="brand" aria-label="Neothesia 练习室首页"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>neothesia<span class="brand-sub">PRACTICE STUDIO</span></span></a>
+    <div class="topbar-left"><a href="select.html" class="icon-button" aria-label="返回选关">←</a><a href="/" class="brand" aria-label="Neothesia 练习室首页"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>neothesia<span class="brand-sub">PRACTICE STUDIO</span></span></a></div>
     <div class="top-right"><span class="private-label"><svg viewBox="0 0 24 24"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>私人练习室</span><button id="help" class="icon-button" aria-label="使用说明">?</button></div>
   </header>
   <main>
@@ -22,7 +22,7 @@
       <div class="midi-activity-row"><span class="microcopy" id="midi-activity" role="status"></span></div>
       <div class="continuous-status-row" id="continuous-status" hidden>
         <div class="continuous-progress"><span id="continuous-progress-text">事件 0 / 0</span><span id="continuous-score-text">正确 0 · 弹错 0 · 连击 0</span></div>
-        <div class="continuous-controls"><button id="continuous-restart" class="text-button">↻ 从头再来</button></div>
+        <div class="continuous-controls"><button id="continuous-loop" class="icon-button loop-button" aria-pressed="false" aria-label="完成后循环练习"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg></button><button id="continuous-restart" class="text-button">↻ 从头再来</button></div>
       </div>
       <div class="practice-grid">
         <div class="instrument-panel">
