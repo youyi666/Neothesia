@@ -97,6 +97,37 @@ function drawScoreInto(targetId,notes,fs,color){let svg='<svg viewBox="0 0 560 1
   const gap=notes.length>1?Math.min(140,420/(notes.length-1)):0;
   notes.forEach((n,i)=>{const letters={C:0,D:1,E:2,F:3,G:4,A:5,B:6};const step=octave(n)*7+letters[pitch(n)[0]];const y=104-(step-(2*7+4))*8;const x=notes.length===1?260:162+i*gap;for(let ledger=120;ledger<=y;ledger+=16)svg+=`<path d="M${x-17} ${ledger}h34" stroke="#83968a"/>`;for(let ledger=24;ledger>=y;ledger-=16)svg+=`<path d="M${x-17} ${ledger}h34" stroke="#83968a"/>`;svg+=`<g class="score-tone" data-midi="${n}" tabindex="0" role="button" aria-label="试听 ${name(n)}"><ellipse cx="${x}" cy="${y}" rx="10" ry="6.5" transform="rotate(-17 ${x} ${y})" fill="${color}"/>${pitch(n).includes('♭')?`<text x="${x-27}" y="${y+5}" font-size="24" fill="${color}">♭</text>`:''}<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${name(n)} · ${fs[i]} 指</text></g>`;});svg+='</svg>';$(targetId).innerHTML=svg;}
 function drawScore(){drawScoreInto('score',currentNotes(),currentFingers(),state.phase===1?'#9cbedd':'#c5b1e8');}
+// 连续演奏用的谱面条：跟 drawScoreInto 不一样，drawScoreInto 只画"当前一个
+// 音组"（分步骤模式一次只练一组，够用）；连续演奏是往下弹的，只看当前这
+// 一个音符不知道接下来是什么，得往后多显示几个事件，才知道"接下来要弹
+// 什么"。当前事件放大、加亮，后面几个缩小、变暗，一眼能分清"现在"和
+// "接下来"。
+function drawContinuousScoreStrip(targetId,events){
+  const letters={C:0,D:1,E:2,F:3,G:4,A:5,B:6};
+  const yFor=(n)=>{const step=octave(n)*7+letters[pitch(n)[0]];return 104-(step-(2*7+4))*8;};
+  let svg='<svg viewBox="0 0 560 155" role="img" aria-label="接下来几个音符的谱面对照">';
+  for(let y=40;y<=104;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
+  svg+='<path d="M51 69c-17-12-13-31 3-31 22 0 20 35-9 52m2-44a4 4 0 1 0 0 .1" stroke="#b6c6b4" stroke-width="2.4" fill="none"/><circle cx="73" cy="48" r="2" fill="#b6c6b4"/><circle cx="73" cy="64" r="2" fill="#b6c6b4"/>';
+  const startX=115,endX=512;
+  const stepX=events.length>1?(endX-startX)/(events.length-1):0;
+  events.forEach((event,i)=>{
+    const x=events.length===1?(startX+endX)/2:startX+i*stepX;
+    const isCurrent=i===0;
+    const color=isCurrent?'#c5b1e8':'#5c6b64';
+    if(isCurrent)svg+=`<rect x="${x-16}" y="30" width="32" height="112" fill="#2f2a3d" opacity=".55" rx="4"/>`;
+    const notesSorted=[...event.notes].sort((a,b)=>a.note-b.note);
+    notesSorted.forEach(n=>{
+      const y=yFor(n.note);
+      for(let ledger=120;ledger<=y;ledger+=16)svg+=`<path d="M${x-13} ${ledger}h26" stroke="#83968a"/>`;
+      for(let ledger=24;ledger>=y;ledger-=16)svg+=`<path d="M${x-13} ${ledger}h26" stroke="#83968a"/>`;
+      const rx=isCurrent?9:6,ry=isCurrent?6:4;
+      svg+=`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-17 ${x} ${y})" fill="${color}"/>`;
+    });
+    if(isCurrent)svg+=`<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${notesSorted.map(n=>name(n.note)).join('·')}</text>`;
+  });
+  svg+='</svg>';
+  $(targetId).innerHTML=svg;
+}
 function render(){const g=group(),notes=currentNotes(),fs=currentFingers(),bass=state.phase===1,groupCount=GROUPS.length;$('group-label').textContent=`手型 ${String(state.group+1).padStart(2,'0')} / ${String(groupCount).padStart(2,'0')}`;$('chord-symbol').textContent=g.symbol;$('chord-title').textContent=bass?'先找到左手低音':g.title;$('chord-subtitle').textContent=notes.map(name).join(' · ');$('notes-row').innerHTML=notes.map((n,i)=>`<button class="note-card ${bass?'note-bass':''}" data-midi="${n}" aria-label="试听 ${name(n)}，左手 ${fs[i]} 指，${FINGER_NAMES[fs[i]]}"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');$('note-caption').textContent=bass?'先弹这一个低音':`${notes.length===2?'两个':notes.length===1?'这一个':'几个'}音，一起按下`;
   for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=notes.indexOf(n);key.classList.toggle('target',index>=0);key.classList.toggle('bass',bass&&index>=0);key.classList.toggle('ghost',!bass&&n===g.bass);key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;key.setAttribute('aria-label',`试听 ${name(n)}${index>=0?`，左手 ${fs[index]} 指`:''}`);}
   const titles=['先把手型放好','先弹一个低音','松开，再移到和弦','保持手型，再弹一次'];const copies=[`看清这${notes.length}个落点，让手自然展开。`,'用推荐指法轻弹低音，给移手留出时间。','眼睛先看下一个落点，手腕放松地带过去。','手的位置不用变，轻轻抬指后再次落键。'];$('coach-title').textContent=titles[state.phase];$('coach-copy').textContent=copies[state.phase];$('phase-count').textContent=`0${state.phase+1} / 04`;
@@ -366,7 +397,7 @@ function renderContinuous(){
   $('note-caption').textContent=`${pitches.length===1?'这一个':pitches.length===2?'两个':'几个'}音，弹对自动前进`;
   $('play-feedback').textContent='跟着弹，弹对自动前进，弹错会标红提示';
   $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，左手 ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
-  drawScoreInto('continuous-score-strip',pitches,fs,'#c5b1e8');
+  drawContinuousScoreStrip('continuous-score-strip',RAW_EVENTS.slice(idx,idx+6));
   for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=pitches.indexOf(n);key.classList.toggle('target',index>=0);key.classList.remove('bass','ghost');key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;}
   document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.remove('bass');});
 }
