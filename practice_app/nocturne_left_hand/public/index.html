@@ -30,13 +30,6 @@
           <div class="notes-row" id="notes-row" aria-label="当前音符和指法"></div>
           <div class="listen-row"><span class="microcopy" id="note-caption">三个音，一起按下</span><div><button id="play-separate" class="text-button"><svg viewBox="0 0 24 24"><path d="M5 16v-3m7 3V8m7 8V4"/></svg>逐音听</button><button id="play-together" class="text-button"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>一起听</button></div></div>
           <div class="play-feedback-row"><span class="microcopy" id="play-feedback" role="status"></span></div>
-          <div class="view-controls"><div class="segmented" role="tablist" aria-label="音高显示方式"><button id="view-keyboard" class="selected" role="tab" aria-selected="true" aria-controls="keyboard-view">键盘引导</button><button id="view-score" role="tab" aria-selected="false" aria-controls="score-view">疏朗谱面</button></div><span class="view-hint" id="view-hint">与真实琴键一一对应</span></div>
-          <div id="keyboard-view" role="tabpanel" aria-labelledby="view-keyboard">
-            <div class="keyboard-map"><span id="position-label">中央 C 左侧 · 低音区</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
-            <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
-            <div class="keyboard-footer"><span><i class="legend-dot bass"></i>左手低音</span><span><i class="legend-dot chord"></i>左手和弦</span><span class="rh-legend"><i class="legend-dot melody"></i>右手旋律（本练习隐藏）</span><span class="number-legend">数字 = 手指</span></div>
-          </div>
-          <div id="score-view" hidden role="tabpanel" aria-labelledby="view-score"><div class="score-topline"><span>低音谱号 · 单组放大</span><span>音高对照，非节奏谱</span></div><div id="score"></div><p class="score-note">只呈现当前音组。点音符或上方音名，可对照试听。</p></div>
           <div class="action-insight"><span class="insight-icon">↗</span><div><strong id="move-title">先找到手型，再连接低音</strong><p id="move-text">先把 5、3、1 指轻放在标记的琴键上，不急着弹。</p></div></div>
         </div>
         <aside class="coach-panel" aria-label="逐步动作引导">
@@ -51,6 +44,13 @@
           <p class="comfort-note">以手掌舒适为准。够不到时先移手，别硬撑。</p>
         </aside>
       </div>
+      <div class="view-controls"><div class="segmented" role="tablist" aria-label="音高显示方式"><button id="view-keyboard" class="selected" role="tab" aria-selected="true" aria-controls="keyboard-view">键盘引导</button><button id="view-score" role="tab" aria-selected="false" aria-controls="score-view">疏朗谱面</button></div><span class="view-hint" id="view-hint">全键盘 C1 - C7 · 位置和真实琴键一一对应</span></div>
+      <div id="keyboard-view" class="keyboard-section" role="tabpanel" aria-labelledby="view-keyboard">
+        <div class="keyboard-map"><span id="position-label">全键盘 C1 – C7</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
+        <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
+        <div class="keyboard-footer"><span><i class="legend-dot bass"></i>左手低音</span><span><i class="legend-dot chord"></i>左手和弦</span><span class="rh-legend"><i class="legend-dot melody"></i>右手旋律（本练习隐藏）</span><span class="number-legend">数字 = 手指</span></div>
+      </div>
+      <div id="score-view" class="keyboard-section" hidden role="tabpanel" aria-labelledby="view-score"><div class="score-topline"><span>低音谱号 · 单组放大</span><span>音高对照，非节奏谱</span></div><div id="score"></div><p class="score-note">只呈现当前音组。点音符或上方音名，可对照试听。</p></div>
       <div class="pedal-strip"><div class="pedal-label"><svg viewBox="0 0 32 24"><path d="M8 19 13 5q1-3 4-2l6 2q3 1 1 4l-9 12Z"/><path d="M4 22h23"/></svg><div><strong>踏板引导 <span id="pedal-badge">先不加踏板</span></strong><small id="pedal-description">先练准落点，再用延音连接换位。</small></div></div><button id="pedal-toggle" class="switch" role="switch" aria-checked="false" aria-label="启用踏板引导"><span></span></button></div>
       <div class="pedal-detail" id="pedal-detail" hidden><div class="pedal-steps"><span><b>1</b>弹新低音</span><i>→</i><span><b>2</b>抬起旧踏板</span><i>→</i><span><b>3</b>随即踩下</span></div><p>换和声时，让旧声音清掉；同一和声内可保留延音。下面可试听“有 / 无踏板”的换位。</p><div class="pedal-actions"><button id="pedal-demo" class="text-button">▷ 试听踏板连接</button><button id="pedal-manual" class="small-button" aria-pressed="false">踏板已抬起 · 点按踩下</button></div><span class="pedal-state" id="pedal-state" role="status"></span></div>
       <div class="transport"><div class="playback-controls"><button id="demo" class="round-play" aria-label="播放本组完整示范"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg></button><div><strong id="demo-label">听一遍完整动作</strong><small id="audio-status" role="status">低音 → 移手 → 和弦</small></div><button id="loop" class="icon-button loop-button" aria-pressed="false" aria-label="循环本组示范"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg></button></div><div class="advance-controls"><button id="previous" class="icon-button" aria-label="上一步">←</button><button id="next" class="primary-button">手型就位，练低音 <span>→</span></button></div></div>

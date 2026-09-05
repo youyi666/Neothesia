@@ -83,11 +83,14 @@ async function demo(pedalOnly=false){if(playing){stopAudio();return;}stopAudio()
     if(withPedal){later(()=>{const nextGroup=GROUPS[(state.group+1)%GROUPS.length];$('audio-status').textContent='4 · 新低音落键，换踏板';playNote(nextGroup.bass,{duration:beat*.55,velocity:.7});$('pedal-state').textContent='新低音落键后，抬起踏板清掉旧和声。';later(()=>pedalSet(false),55);later(()=>{pedalSet(true);$('pedal-state').textContent='随即重新踩下，接住新低音。';},155);},beat*3000);}
     later(()=>{if(token!==runId)return;if(state.loop&&!pedalOnly)cycle();else stopAudio();},beat*(withPedal?4500:3300));};cycle();}
 function buildKeyboard(){
-  // 键盘范围按真实加载到的音符动态算，别再写死 36-60——夜曲左手实际音域比
-  // 原型示例数据宽，写死的话某些组的目标音会落在键盘外，根本按不到。
+  // 键盘范围统一固定成 C1-C7（全键盘常见的实用音域），不再按每首曲子的
+  // 音符动态收窄——用户明确要求"视觉效果统一成全部一样的"，每次打开
+  // 都是同一张键盘，靠肌肉记忆认位置，不会因为换了曲子键盘长得不一样。
+  // Math.min/max 仍然做安全兜底：真的有曲子的音符落在这个范围外，
+  // 照样把键盘边界往外扩，不会让目标音消失在键盘外弹不到。
   const allNotes=GROUPS.flatMap(g=>[g.bass,...g.notes]);
-  const lo=Math.min(36,...allNotes)-2;
-  const hi=Math.max(60,...allNotes)+2;
+  const lo=Math.min(24,...allNotes); // C1
+  const hi=Math.max(96,...allNotes); // C7
   const whites=[];for(let n=lo;n<=hi;n++)if(!isBlack(n))whites.push(n);const count=whites.length;let content='';for(let n=lo;n<=hi;n++){const black=isBlack(n);const pos=black?whites.filter(v=>v<n).length-.31:whites.indexOf(n);content+=`<button class="piano-key ${black?'black':'white'}" data-midi="${n}" style="left:${pos/count*100}%;width:${(black?.62:1)/count*100}%" aria-label="试听 ${name(n)}"><span class="key-note">${name(n)}</span></button>`;}$('keyboard').innerHTML=content;$('keyboard').addEventListener('click',e=>{const key=e.target.closest('[data-midi]');if(key)listenOne(Number(key.dataset.midi));});}
 function drawScore(){const notes=currentNotes(),fs=currentFingers(),color=state.phase===1?'#9cbedd':'#c5b1e8';let svg='<svg viewBox="0 0 560 155" role="img" aria-label="当前音组的低音谱号音高对照">';for(let y=40;y<=104;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
   svg+='<path d="M51 69c-17-12-13-31 3-31 22 0 20 35-9 52m2-44a4 4 0 1 0 0 .1" stroke="#b6c6b4" stroke-width="2.4" fill="none"/><circle cx="73" cy="48" r="2" fill="#b6c6b4"/><circle cx="73" cy="64" r="2" fill="#b6c6b4"/>';
@@ -212,7 +215,7 @@ function reportMidiActivity(pitch){
 // 键盘（和音卡，两者都带 data-midi）上留下痕迹，不然弹了琴完全看不出网页
 // 有没有反应。灰色＝按下，红色＝这一下被判定弹错（叠加在灰色之上，松开时
 // 一起清掉），跟"目标音"用的紫/蓝配色分开，不会混淆"要弹哪个"和"刚弹了哪个"。
-function markKeyPressed(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.add('live-pressed'));}
+function markKeyPressed(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>{el.classList.add('live-pressed');el.classList.remove('live-wrong');});}
 function markKeyWrong(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.add('live-wrong'));}
 function markKeyReleased(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.remove('live-pressed','live-wrong'));}
 
