@@ -116,7 +116,7 @@ $('score').addEventListener('click',e=>{const note=e.target.closest('[data-midi]
 $('score').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const note=e.target.closest('[data-midi]');if(note){e.preventDefault();e.stopPropagation();listenOne(Number(note.dataset.midi));}}});
 $('play-separate').onclick=()=>listen(currentNotes(),true);$('play-together').onclick=()=>listen(currentNotes());$('demo').onclick=()=>demo();$('pedal-demo').onclick=()=>demo(true);$('next').onclick=next;$('previous').onclick=previous;
 $('loop').onclick=()=>{state.loop=!state.loop;$('loop').setAttribute('aria-pressed',String(state.loop));announce(state.loop?'已开启本组循环。点击停止按钮可随时停下。':'已关闭本组循环。');};
-$('tempo').oninput=e=>{state.tempo=Number(e.target.value);$('tempo-value').value=state.tempo;save();if(playing)stopAudio();if(state.mode==='continuous')restartContinuousSession();};
+$('tempo').oninput=e=>{state.tempo=Number(e.target.value);$('tempo-value').value=state.tempo;save();if(playing)stopAudio();};
 $('fingering').onchange=e=>{stopAudio();state.fingering=Number(e.target.value);render();announce('已同步更新音卡、手型与琴键指法。');};
 $('pedal-toggle').onclick=()=>{if(!HAS_PEDAL_DATA)return;stopAudio();state.pedal=!state.pedal;save();render();};
 $('pedal-manual').onclick=async()=>{if(playing)stopAudio();try{await readyAudio();pedalSet(!manualPedal);$('pedal-state').textContent=manualPedal?'现在点击琴键：松开后仍延音。再次点击抬起踏板，声音停止。':'旧声音已释放。';}catch{announce('请再次点击，开启浏览器声音。');}};
@@ -208,19 +208,42 @@ function reportMidiActivity(pitch){
   $('midi-activity').textContent=`🎵 刚收到：${name(pitch)}（${pitch}）`;
 }
 
+// 真实按键的"我收到了"视觉反馈——独立于判分对错，任何真实 Note On/Off 都要在
+// 键盘（和音卡，两者都带 data-midi）上留下痕迹，不然弹了琴完全看不出网页
+// 有没有反应。灰色＝按下，红色＝这一下被判定弹错（叠加在灰色之上，松开时
+// 一起清掉），跟"目标音"用的紫/蓝配色分开，不会混淆"要弹哪个"和"刚弹了哪个"。
+function markKeyPressed(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.add('live-pressed'));}
+function markKeyWrong(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.add('live-wrong'));}
+function markKeyReleased(pitch){document.querySelectorAll(`[data-midi="${pitch}"]`).forEach(el=>el.classList.remove('live-pressed','live-wrong'));}
+
 function handleMidiMessage(e){
   const [status,data1,data2]=e.data;
   const command=status&0xf0;
   if(command===0x90&&data2>0) reportMidiActivity(data1);
   if(state.mode==='continuous'){
-    if(!continuousSession||!continuousRunning) return;
-    if(command===0x90&&data2>0) continuousSession.noteOn(data1);
-    else if(command===0x80||(command===0x90&&data2===0)) continuousSession.noteOff(data1);
+    if(!continuousSession) return;
+    let justWrong=false;
+    if(command===0x90&&data2>0){
+      markKeyPressed(data1);
+      const before=continuousSession.getResult().extraNotes;
+      continuousSession.noteOn(data1);
+      if(continuousSession.getResult().extraNotes>before){
+        markKeyWrong(data1);
+        justWrong=true;
+      }
+    }else if(command===0x80||(command===0x90&&data2===0)){
+      continuousSession.noteOff(data1);
+      markKeyReleased(data1);
+    }
     renderContinuous();
+    // renderContinuous() 会用通用提示覆盖 play-feedback，弹错这一下要盖回去，
+    // 不然"✗弹错了"这句话刚设置就被普通提示语冲掉，用户根本看不到。
+    if(justWrong)$('play-feedback').textContent='✗ 弹错了，再试一次';
     return;
   }
   if(!scoringSession) return;
   if(command===0x90&&data2>0){
+    markKeyPressed(data1);
     const before=scoringSession.getResult().extraNotes;
     scoringSession.noteOn(data1);
     const result=scoringSession.getResult();
@@ -229,23 +252,27 @@ function handleMidiMessage(e){
       later(()=>next(),350);
     }else if(result.extraNotes>before){
       $('play-feedback').textContent='✗ 弹错了，再试一次';
+      markKeyWrong(data1);
     }
   }else if(command===0x80||(command===0x90&&data2===0)){
     scoringSession.noteOff(data1);
+    markKeyReleased(data1);
   }
 }
 
 $('midi-connect').onclick=connectMidi;
 updateMidiStatusLabel();
 
-// ── 连续演奏模式（熟悉手型后，按真实节奏连续弹完整段范围）─────────────────
-// 分步骤模式（GROUPS）是为了把"认识手型→弹低音→换位→弹和弦"拆成教学动作，
-// 天然是等待模式（wait mode）：不管弹多久都等你弹对。连续演奏用的是
-// RAW_EVENTS——配对前的原始 onset 序列，还原真实的演奏顺序和时值，套用仓库
-// 已有的 lib/scoring.js createContinuousModeSession（跟主应用同一份、同一套
-// 测试覆盖）：按曲速给每个事件一个到期时间，错过不会卡住，直接判错继续走，
-// 练的是跟上节奏和错误恢复能力，不是"研究手型"。
-let continuousSession=null,continuousTimer=null,continuousRunning=false;
+// ── 连续演奏模式（熟悉手型后，不再拆步骤，一路弹下去）─────────────────────
+// 一开始按曲速用 tick 时钟推进（createContinuousModeSession），实测完全
+// 跟不上——弹对了也不会立刻前进，得等到时钟判定的到期时间，体验和"慢练
+// 分步骤"（弹对立刻前进）完全脱节。改成跟分步骤模式同一套引擎
+// （createWaitModeSession，参见 syncScoringSession）：只是把 GROUPS 拆开的
+// "低音→和弦"两次落键还原回 RAW_EVENTS 原始 onset 序列、一次性传入全部
+// 事件，不再逐阶段各开一个 session。没有时钟、没有到期时间——弹对哪一个
+// 事件就立刻前进到下一个，弹错不会卡住（等你弹对为止，不强制失败），完全
+// 由用户的真实节奏驱动，不会出现"弹对了却要等"的错觉。
+let continuousSession=null;
 
 function pseudoChordInfo(pitches){
   let symbol=pitch(pitches[0]),title;
@@ -261,27 +288,7 @@ function pseudoChordInfo(pitches){
 }
 
 function restartContinuousSession(){
-  stopContinuousClock();
-  continuousSession=window.PracticeScoring.createContinuousModeSession(RAW_EVENTS,{bpm:state.tempo,ticksPerQuarter:TICKS_PER_QUARTER});
-  continuousRunning=false;
-  renderContinuous();
-}
-
-function startContinuousClock(){
-  stopContinuousClock();
-  continuousTimer=setInterval(()=>{
-    if(!continuousSession)return;
-    continuousSession.tick(Date.now());
-    if(continuousSession.getResult().isComplete){continuousRunning=false;stopContinuousClock();}
-    renderContinuous();
-  },80);
-}
-function stopContinuousClock(){if(continuousTimer)clearInterval(continuousTimer);continuousTimer=null;}
-
-function toggleContinuousRun(){
-  if(!continuousSession)return;
-  continuousRunning=!continuousRunning;
-  if(continuousRunning)startContinuousClock();else stopContinuousClock();
+  continuousSession=window.PracticeScoring.createWaitModeSession(RAW_EVENTS);
   renderContinuous();
 }
 
@@ -290,15 +297,15 @@ function renderContinuous(){
   const result=continuousSession.getResult();
   const idx=continuousSession.getEventIndex();
   const event=RAW_EVENTS[idx]||null;
-  $('continuous-toggle').textContent=result.isComplete?'✓ 已完成':continuousRunning?'⏸ 暂停':'▶ 开始';
   $('continuous-progress-text').textContent=result.isComplete?`完成 ${RAW_EVENTS.length} / ${RAW_EVENTS.length} 个事件`:`事件 ${Math.min(idx+1,RAW_EVENTS.length)} / ${RAW_EVENTS.length}`;
   $('continuous-score-text').textContent=`正确 ${result.correctEvents} · 弹错 ${result.wrongEvents} · 连击 ${result.currentCombo}（最长 ${result.maxCombo}）`;
   $('group-label').textContent=`连续演奏 · 第 ${FROM_MEASURE+1}-${TO_MEASURE} 小节`;
-  $('note-caption').textContent=result.isComplete?'已完成，可以调速再来一轮':'跟着速度走，弹错不会卡住，直接往下弹';
   if(!event){
-    $('chord-symbol').textContent=result.isComplete?'✓':'♩';
-    $('chord-title').textContent=result.isComplete?'这段范围，连续弹完了':'准备开始';
-    $('chord-subtitle').textContent=result.isComplete?'点"从头再来"可以再弹一遍，或者调整示范速度再试。':'点击"▶ 开始"，按提示的速度连续往下弹。';
+    $('chord-symbol').textContent='✓';
+    $('chord-title').textContent='这段范围，连续弹完了';
+    $('chord-subtitle').textContent='点"从头再来"可以再弹一遍。';
+    $('note-caption').textContent='已完成';
+    $('play-feedback').textContent='✓ 全部弹完了';
     $('notes-row').innerHTML='';
     for(const key of $('keyboard').children)key.classList.remove('target','bass','ghost');
     document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>el.classList.remove('active','bass'));
@@ -311,10 +318,11 @@ function renderContinuous(){
   $('chord-symbol').textContent=info.symbol;
   $('chord-title').textContent=info.title;
   $('chord-subtitle').textContent=pitches.map(name).join(' · ');
+  $('note-caption').textContent=`${pitches.length===1?'这一个':pitches.length===2?'两个':'几个'}音，弹对自动前进`;
+  $('play-feedback').textContent='跟着弹，弹对自动前进，弹错会标红提示';
   $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，左手 ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
   for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=pitches.indexOf(n);key.classList.toggle('target',index>=0);key.classList.remove('bass','ghost');key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;}
   document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.remove('bass');});
-  centerKeyboard();
 }
 
 function enterContinuousMode(){
@@ -331,7 +339,6 @@ function enterContinuousMode(){
 }
 function exitContinuousMode(){
   if(state.mode!=='continuous')return;
-  stopContinuousClock();
   state.mode='step';
   document.body.classList.remove('mode-continuous');
   $('mode-continuous').classList.remove('selected');$('mode-continuous').setAttribute('aria-selected','false');
@@ -341,7 +348,6 @@ function exitContinuousMode(){
 }
 $('mode-step').onclick=exitContinuousMode;
 $('mode-continuous').onclick=enterContinuousMode;
-$('continuous-toggle').onclick=toggleContinuousRun;
 $('continuous-restart').onclick=restartContinuousSession;
 
 function setView(view){state.view=view;for(const v of ['keyboard','score']){$('view-'+v).classList.toggle('selected',v===view);$('view-'+v).setAttribute('aria-selected',String(v===view));$(v+'-view').hidden=v!==view;}$('view-hint').textContent=view==='keyboard'?'与真实琴键一一对应':'保持音高，不压缩整曲';if(view==='keyboard')centerKeyboard();}
@@ -349,8 +355,8 @@ $('view-keyboard').onclick=()=>setView('keyboard');$('view-score').onclick=()=>s
 $('help').onclick=()=>{stopAudio();$('help-dialog').showModal();};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $('restart').onclick=()=>state.mode==='continuous'?restartContinuousSession():reset();$('practice-again').onclick=()=>{$('complete-dialog').close();reset();};
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){stopAudio();return;}if(e.altKey||e.ctrlKey||e.metaKey||e.repeat||document.querySelector('dialog[open]')||/INPUT|SELECT|TEXTAREA|BUTTON|A/.test(e.target.tagName))return;if(state.mode==='continuous'){if(e.code==='Space'){e.preventDefault();toggleContinuousRun();}return;}if(e.code==='Space'){e.preventDefault();demo();}else if(e.key==='ArrowRight'){e.preventDefault();next();}else if(e.key==='ArrowLeft'){e.preventDefault();previous();}else if(['1','2','3'].includes(e.key)){const n=currentNotes()[Number(e.key)-1];if(n!==undefined)listenOne(n);}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){stopAudio();if(continuousRunning){continuousRunning=false;stopContinuousClock();renderContinuous();}}});window.addEventListener('pagehide',stopAudio);window.addEventListener('resize',centerKeyboard);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){stopAudio();return;}if(e.altKey||e.ctrlKey||e.metaKey||e.repeat||document.querySelector('dialog[open]')||/INPUT|SELECT|TEXTAREA|BUTTON|A/.test(e.target.tagName))return;if(state.mode==='continuous')return;if(e.code==='Space'){e.preventDefault();demo();}else if(e.key==='ArrowRight'){e.preventDefault();next();}else if(e.key==='ArrowLeft'){e.preventDefault();previous();}else if(['1','2','3'].includes(e.key)){const n=currentNotes()[Number(e.key)-1];if(n!==undefined)listenOne(n);}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio();});window.addEventListener('pagehide',stopAudio);window.addEventListener('resize',centerKeyboard);
 
 // ── 真实数据接入（Issue #4 任务 1：接入真实课程数据 / 任务 2 的指法部分）──────
 // 把 practice-data 接口返回的、已经按 onset 分组的左手事件，两两配对成
