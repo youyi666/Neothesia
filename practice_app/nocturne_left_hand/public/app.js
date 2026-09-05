@@ -104,7 +104,7 @@ function render(){const g=group(),notes=currentNotes(),fs=currentFingers(),bass=
   $('pedal-toggle').disabled=!HAS_PEDAL_DATA;$('pedal-toggle').setAttribute('aria-checked',String(state.pedal));$('pedal-detail').hidden=!state.pedal;
   $('pedal-badge').textContent=!HAS_PEDAL_DATA?'本曲无踏板数据':state.pedal?'延音连接':'先不加踏板';
   $('pedal-description').textContent=!HAS_PEDAL_DATA?'这段范围的 MIDI 没有记录踏板信息，不编造原曲踏板标记，示范保持关闭。':state.pedal?'示范会在低音落键后踩下，换和声时更换踏板。':'先练准落点，再用延音连接换位。';
-  drawScore();centerKeyboard();}
+  drawScore();centerKeyboard();syncScoringSession();}
 function centerKeyboard(){requestAnimationFrame(()=>{const keys=[...$('keyboard').querySelectorAll('.target')];if(!keys.length)return;const center=keys.reduce((v,k)=>v+k.offsetLeft+k.offsetWidth/2,0)/keys.length;const scroll=$('keyboard-scroll');scroll.scrollLeft=Math.max(0,Math.min($('keyboard').offsetWidth-scroll.clientWidth,center-scroll.clientWidth/2));});}
 function next(){stopAudio();if(state.phase<3){state.phase++;}else{if(!state.done.includes(state.group))state.done.push(state.group);if(state.group<GROUPS.length-1){state.group++;state.phase=0;state.fingering=0;}else if(state.done.length===GROUPS.length){$('complete-dialog').showModal();}else{state.group=GROUPS.findIndex((_,i)=>!state.done.includes(i));state.phase=0;state.fingering=0;announce('这一组已记下，继续练习尚未完成的手型。');}}save();render();}
 function previous(){stopAudio();if(state.phase>0)state.phase--;else if(state.group>0){state.group--;state.phase=3;state.fingering=0;}save();render();}
@@ -120,6 +120,101 @@ $('pedal-toggle').onclick=()=>{if(!HAS_PEDAL_DATA)return;stopAudio();state.pedal
 $('pedal-manual').onclick=async()=>{if(playing)stopAudio();try{await readyAudio();pedalSet(!manualPedal);$('pedal-state').textContent=manualPedal?'现在点击琴键：松开后仍延音。再次点击抬起踏板，声音停止。':'旧声音已释放。';}catch{announce('请再次点击，开启浏览器声音。');}};
 $('phase-list').onclick=e=>{const b=e.target.closest('[data-phase]');if(!b)return;stopAudio();state.phase=Number(b.dataset.phase);save();render();};
 $('group-list').onclick=e=>{const b=e.target.closest('[data-group]');if(!b)return;stopAudio();state.group=Number(b.dataset.group);state.phase=0;state.fingering=0;save();render();};
+
+// ── Web MIDI 真实评分（Issue #4 任务 4）───────────────────────────────────
+// 只在"先弹低音"（1）、"和弦落下"（2）、"和弦再弹"（3）这三个真正要弹奏的阶段
+// 判分；阶段 0（认识和弦·摆好手型）是看不弹，不接判分。复用仓库已有的
+// lib/scoring.js（跟主应用评分页同一份、同一套测试覆盖），每进入一个待判分
+// 阶段就用当前目标音开一个只有一个事件的等待模式 session：全部目标音同时
+// 按下即算这一阶段弹对，天然支持"和弦允许分先后按下、按住"而不要求同一毫秒
+// 到达。没有连 MIDI 设备时"下一步"按钮还是唯一、始终可用的推进方式——判分是
+// 叠加上去的加分项，不是新增的门槛，不会把没有电子琴的人挡在练习之外。
+const SCORED_PHASES=new Set([1,2,3]);
+let midiAccess=null,midiInputs=[],midiStatus='idle';
+let scoringKey=null,scoringSession=null;
+
+function scoringNotesForCurrentPhase(){
+  return currentNotes().map(n=>({note:n,hand:'left'}));
+}
+
+// 阶段没变、只是 MIDI 连接状态变了（比如刚连上/断开）时，也要能刷新这行提示，
+// 不能只在"刚进入这个阶段"那一刻算一次——所以单独抽出来，两处都调它。
+function idleFeedbackText(){
+  if(!SCORED_PHASES.has(state.phase)) return '';
+  if(midiStatus==='connected') return '🎹 弹对会自动前进';
+  if(midiStatus==='no-devices'||midiStatus==='denied'||midiStatus==='unsupported') return '';
+  return '未连接 MIDI 键盘 · 弹完请手动点下一步';
+}
+
+function syncScoringSession(){
+  if(!SCORED_PHASES.has(state.phase)){
+    scoringKey=null;scoringSession=null;
+    $('play-feedback').textContent='';
+    return;
+  }
+  const key=`${state.group}:${state.phase}`;
+  if(scoringKey===key) return;
+  scoringKey=key;
+  scoringSession=window.PracticeScoring.createWaitModeSession([{notes:scoringNotesForCurrentPhase()}]);
+  $('play-feedback').textContent=idleFeedbackText();
+}
+
+function updateMidiStatusLabel(){
+  const labels={idle:'未连接 · 手动推进',requesting:'请求授权中…',unsupported:'此浏览器不支持 Web MIDI，仍可手动推进',denied:'授权被拒绝，仍可手动推进','no-devices':'没有找到 MIDI 设备，仍可手动推进',connected:'已连接 · 弹对自动前进'};
+  $('midi-status').textContent=labels[midiStatus]||midiStatus;
+  $('midi-connect').textContent=midiStatus==='connected'?'🎹 已连接':'🎹 连接 MIDI 键盘';
+  $('midi-connect').disabled=midiStatus==='requesting';
+  $('play-feedback').textContent=idleFeedbackText();
+}
+
+function bindMidiInputs(inputs){
+  const nextInputs=inputs.filter(input=>input.state!=='disconnected');
+  for(const input of midiInputs) if(!nextInputs.includes(input)) input.onmidimessage=null;
+  midiInputs=nextInputs;
+  for(const input of nextInputs) input.onmidimessage=handleMidiMessage;
+  midiStatus=nextInputs.length?'connected':'no-devices';
+  updateMidiStatusLabel();
+  syncScoringSession();
+}
+
+async function connectMidi(){
+  if(!navigator.requestMIDIAccess){midiStatus='unsupported';updateMidiStatusLabel();return;}
+  midiStatus='requesting';updateMidiStatusLabel();
+  try{
+    const access=await navigator.requestMIDIAccess({sysex:false});
+    midiAccess=access;
+    const inputs=[...access.inputs.values()];
+    access.onstatechange=()=>{
+      const current=[...access.inputs.values()];
+      if(current.length) bindMidiInputs(current);
+      else if(midiInputs.length){midiStatus='no-devices';updateMidiStatusLabel();}
+    };
+    if(!inputs.length){midiStatus='no-devices';updateMidiStatusLabel();return;}
+    bindMidiInputs(inputs);
+  }catch(e){midiStatus='denied';updateMidiStatusLabel();}
+}
+
+function handleMidiMessage(e){
+  if(!scoringSession) return;
+  const [status,data1,data2]=e.data;
+  const command=status&0xf0;
+  if(command===0x90&&data2>0){
+    const before=scoringSession.getResult().extraNotes;
+    scoringSession.noteOn(data1);
+    const result=scoringSession.getResult();
+    if(result.isComplete){
+      $('play-feedback').textContent='✓ 弹对了！';
+      later(()=>next(),350);
+    }else if(result.extraNotes>before){
+      $('play-feedback').textContent='✗ 弹错了，再试一次';
+    }
+  }else if(command===0x80||(command===0x90&&data2===0)){
+    scoringSession.noteOff(data1);
+  }
+}
+
+$('midi-connect').onclick=connectMidi;
+updateMidiStatusLabel();
 function setView(view){state.view=view;for(const v of ['keyboard','score']){$('view-'+v).classList.toggle('selected',v===view);$('view-'+v).setAttribute('aria-selected',String(v===view));$(v+'-view').hidden=v!==view;}$('view-hint').textContent=view==='keyboard'?'与真实琴键一一对应':'保持音高，不压缩整曲';if(view==='keyboard')centerKeyboard();}
 $('view-keyboard').onclick=()=>setView('keyboard');$('view-score').onclick=()=>setView('score');
 $('help').onclick=()=>{stopAudio();$('help-dialog').showModal();};
