@@ -24,6 +24,10 @@
         <div class="continuous-progress"><span id="continuous-progress-text">事件 0 / 0</span><span id="continuous-score-text">正确 0 · 弹错 0 · 连击 0</span></div>
         <div class="continuous-controls"><button id="continuous-loop" class="icon-button loop-button" aria-pressed="false" aria-label="完成后循环练习"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg></button><button id="continuous-restart" class="text-button">↻ 从头再来</button></div>
       </div>
+      <div class="measure-banner" id="measure-banner" role="status" hidden>
+        <span id="measure-banner-text">✓ 第 1 小节弹完了，3 秒后继续下一小节</span>
+        <div class="measure-banner-track"><div class="measure-banner-bar" id="measure-banner-bar"></div></div>
+      </div>
       <div class="practice-grid">
         <div class="instrument-panel">
           <div class="chord-heading"><div><div class="eyebrow" id="group-label">手型 01 / 04</div><div class="chord-name"><h2 id="chord-symbol">E♭</h2><div><strong id="chord-title">降 E 大三和弦</strong><span id="chord-subtitle">B♭2 · E♭3 · G3</span></div></div></div><span class="hand-tag">L <span>左手</span></span></div>
@@ -46,6 +50,7 @@
       </div>
       <div class="view-controls"><div class="segmented" role="tablist" aria-label="音高显示方式"><button id="view-keyboard" class="selected" role="tab" aria-selected="true" aria-controls="keyboard-view">键盘引导</button><button id="view-score" role="tab" aria-selected="false" aria-controls="score-view">疏朗谱面</button></div><span class="view-hint" id="view-hint">全键盘 C1 - C7 · 位置和真实琴键一一对应</span></div>
       <div id="keyboard-view" class="keyboard-section" role="tabpanel" aria-labelledby="view-keyboard">
+        <div class="continuous-score-strip" id="continuous-score-strip" aria-label="当前音符的谱面对照" hidden></div>
         <div class="keyboard-map"><span id="position-label">全键盘 C1 – C7</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
         <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
         <div class="keyboard-footer"><span><i class="legend-dot bass"></i>左手低音</span><span><i class="legend-dot chord"></i>左手和弦</span><span class="rh-legend"><i class="legend-dot melody"></i>右手旋律（本练习隐藏）</span><span class="number-legend">数字 = 手指</span></div>
