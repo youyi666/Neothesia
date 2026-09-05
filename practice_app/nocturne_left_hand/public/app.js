@@ -140,7 +140,9 @@ function scoringNotesForCurrentPhase(){
 // 阶段没变、只是 MIDI 连接状态变了（比如刚连上/断开）时，也要能刷新这行提示，
 // 不能只在"刚进入这个阶段"那一刻算一次——所以单独抽出来，两处都调它。
 function idleFeedbackText(){
-  if(!SCORED_PHASES.has(state.phase)) return '';
+  // 阶段 0（认识和弦）故意不判分，只是"看"；连着 MIDI 也一样——这里必须给一句
+  // 明确提示，否则用户已经连上设备、在这一步按键却毫无反应，会误以为连接没生效。
+  if(!SCORED_PHASES.has(state.phase)) return midiStatus==='connected'?'这一步只看不弹，点下一步开始弹低音':'';
   if(midiStatus==='connected') return '🎹 弹对会自动前进';
   if(midiStatus==='no-devices'||midiStatus==='denied'||midiStatus==='unsupported') return '';
   return '未连接 MIDI 键盘 · 弹完请手动点下一步';
@@ -149,7 +151,7 @@ function idleFeedbackText(){
 function syncScoringSession(){
   if(!SCORED_PHASES.has(state.phase)){
     scoringKey=null;scoringSession=null;
-    $('play-feedback').textContent='';
+    $('play-feedback').textContent=idleFeedbackText();
     return;
   }
   const key=`${state.group}:${state.phase}`;
@@ -194,10 +196,21 @@ async function connectMidi(){
   }catch(e){midiStatus='denied';updateMidiStatusLabel();}
 }
 
+// 独立于判分逻辑之外、任何时候收到 Note On 都会更新的"收到信号"提示——不看
+// scoringSession 是否存在。这是特意加的诊断信息：如果用户反馈"显示已连接但按键
+// 没反应"，这行文字能立刻分辨是"消息根本没送到浏览器"（这行也不会变，说明是
+// 设备/驱动/浏览器权限问题，不是这个页面的代码问题）还是"消息收到了，只是没有
+// 判分"（这行会变，多半是当前这一步（阶段0"认识和弦"）本来就不判分，或者弹的
+// 音跟目标音不一致）。
+function reportMidiActivity(pitch){
+  $('midi-activity').textContent=`🎵 刚收到：${name(pitch)}（${pitch}）`;
+}
+
 function handleMidiMessage(e){
-  if(!scoringSession) return;
   const [status,data1,data2]=e.data;
   const command=status&0xf0;
+  if(command===0x90&&data2>0) reportMidiActivity(data1);
+  if(!scoringSession) return;
   if(command===0x90&&data2>0){
     const before=scoringSession.getResult().extraNotes;
     scoringSession.noteOn(data1);
