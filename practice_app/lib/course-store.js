@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { readMidi } = require('./midi-file.js');
-const { analyzeSong, extractTrackNotes, groupIntoEvents } = require('./analyze.js');
+const { analyzeSong, extractTrackNotes, groupIntoEvents, extractPedalEvents } = require('./analyze.js');
 const { exportLessonBuffer } = require('./lesson-export.js');
 const {
   predictFingeringForEvents,
@@ -915,6 +915,32 @@ function getMeasureEventSelection(courseId, measureIndex, handMode) {
   return getEventSelectionForRange(courseId, course, lesson);
 }
 
+// 给一组 slice 事件（已按 tick 升序）标注踏板状态：pedalDown = 这一刻踏板是否
+// 踩着；pedalChange = 上一个事件之后到这个事件为止，踏板状态是否发生过切换
+// （对应「这里需要换踏板/踩下踏板」的提示）。切片开始之前的踏板事件只用来
+// 确定初始状态，不算作切片内的"换踏板"提示。空 pedalEvents（曲子没有踏板
+// 标记）时全部返回 false，调用方据此隐藏踏板 UI，而不是显示误导性的"未踩"。
+function annotateEventsWithPedal(events, pedalEvents) {
+  if (!events.length) return [];
+  let cursor = 0;
+  let currentDown = false;
+  while (cursor < pedalEvents.length && pedalEvents[cursor].tick < events[0].tick) {
+    currentDown = pedalEvents[cursor].down;
+    cursor++;
+  }
+  let prevEventTick = -Infinity;
+  return events.map(event => {
+    let changed = false;
+    while (cursor < pedalEvents.length && pedalEvents[cursor].tick <= event.tick) {
+      if (pedalEvents[cursor].tick > prevEventTick) changed = true;
+      currentDown = pedalEvents[cursor].down;
+      cursor++;
+    }
+    prevEventTick = event.tick;
+    return { pedalDown: currentDown, pedalChange: changed };
+  });
+}
+
 function serializeLessonEvents(events) {
   return events.map((event, index) => ({
     index,
@@ -1036,8 +1062,17 @@ function buildPracticeDataFromSelection(selection, options = {}) {
   ].filter(Boolean);
   const totalBeats = Math.max(1, analysis.durationTicks / midi.ticksPerQuarter);
 
+  const pedalEvents = extractPedalEvents(midi);
+  const pedalAnnotations = annotateEventsWithPedal(slice, pedalEvents);
+  const eventsWithPedal = serializeLessonEvents(slice).map((event, index) => ({
+    ...event,
+    pedalDown: pedalAnnotations[index].pedalDown,
+    pedalChange: pedalAnnotations[index].pedalChange,
+  }));
+
   return {
-    events: serializeLessonEvents(slice),
+    events: eventsWithPedal,
+    hasPedalData: pedalEvents.length > 0,
     fingeringDiagnostics,
     // 连续演奏模式（lib/scoring.js createContinuousModeSession）需要按曲速给
     // 每个事件算到期时间，前端拿不到 midi.ticksPerQuarter，所以在这里透传。
@@ -1121,6 +1156,7 @@ const SEED_SONGS = [
   { id: 'bach_prelude_c', title: '巴赫：C大调前奏曲 BWV 846', midi: '07_public_domain_classics/bach_prelude_c_bwv846.mid' },
   { id: 'fur_elise', title: '贝多芬：致爱丽丝', midi: '07_public_domain_classics/beethoven_fur_elise.mid' },
   { id: 'chopin_prelude_28_20', title: '肖邦：前奏曲 Op. 28 No. 20', midi: '07_public_domain_classics/chopin_prelude_op28_no20.mid' },
+  { id: 'chopin_nocturne_9_2', title: '肖邦：夜曲 Op. 9 No. 2（降E大调）', midi: '07_public_domain_classics/chopin_nocturne_op9_no2.mid' },
   { id: 'schubert_ungarische', title: '舒伯特：匈牙利旋律 D.817', midi: '07_public_domain_classics/schubert_ungarische_melodie.mid' },
 ];
 
@@ -1313,6 +1349,7 @@ module.exports = {
   loadDrillManifest,
   buildHandEvents,
   applyCourseFingering,
+  annotateEventsWithPedal,
   SEED_SONGS,
   DEFAULT_COURSE_ID,
   calculateStarCount,

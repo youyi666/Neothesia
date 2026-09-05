@@ -387,6 +387,25 @@ body { font-family:"PingFang SC","Helvetica Neue",sans-serif; background:var(--b
 .practice-now-summary strong { color:var(--text); font-size:18px; letter-spacing:0; }
 .practice-now-summary .lesson-badge { margin-left:auto; }
 .practice-finger-guide { width:min(100%,900px); margin:0 0 16px; }
+.practice-pedal-indicator { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:800; margin:0 0 10px; }
+.practice-pedal-icon { font-size:13px; }
+.practice-pedal-indicator.change-down { background:#ffe066; color:#5c4600; border:1px solid #d4af00; }
+.practice-pedal-indicator.change-up { background:#f4f4f4; color:#666; border:1px solid #ddd; }
+.practice-pedal-indicator.holding { background:#fff8dd; color:#8a6d00; border:1px solid #f0d878; }
+.practice-chord-shape { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 12px; }
+.practice-chord-shape-hand { flex:1 1 220px; min-width:180px; background:#faf9fd; border:1px solid var(--border); border-radius:10px; padding:8px 10px 14px; }
+.practice-chord-shape-label { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.practice-chord-shape-hand-name { font-size:11px; font-weight:700; color:var(--muted); }
+.practice-chord-shape-name { font-size:14px; font-weight:800; }
+.practice-chord-shape-strip { position:relative; height:34px; background:linear-gradient(#fff,#f4f2fb); border-radius:8px; border:1px solid var(--border); }
+.practice-chord-dot { position:absolute; top:50%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:800; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+.practice-chord-dot.black { box-shadow:0 1px 3px rgba(0,0,0,.4), 0 0 0 2px #fff inset; }
+.practice-chord-shape-hand.role-right .practice-chord-shape-name { color:#1f7a45; }
+.practice-chord-shape-hand.role-right .practice-chord-dot { background:#2e9e5b; }
+.practice-chord-shape-hand.role-left-bass .practice-chord-shape-name { color:#1d5aa8; }
+.practice-chord-shape-hand.role-left-bass .practice-chord-dot { background:#2f6fd1; }
+.practice-chord-shape-hand.role-left-chord .practice-chord-shape-name { color:#6b3fa0; }
+.practice-chord-shape-hand.role-left-chord .practice-chord-dot { background:#8b5cd6; }
 .practice-finger-title { color:var(--muted); font-size:11px; font-weight:700; margin:0 0 7px 2px; }
 .practice-finger-list { display:grid; grid-template-columns:repeat(auto-fit, minmax(126px, 1fr)); gap:8px; }
 .practice-finger-card { border:1px solid var(--border); border-left:4px solid #4c8bc7; border-radius:8px; background:var(--card); padding:9px 10px; min-width:0; }
@@ -1116,6 +1135,49 @@ function saveTasks() {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const PITCH_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const DIATONIC_CLASS = [0,0,1,1,2,3,3,4,4,5,5,6];
+
+// Issue #4（练习视觉交互重构）第一步：给"同时按下的一组音"起一个人能记住的
+// 名字，而不是只报音名列表。规则模型面向初学者，匹配不到就交给调用方退化
+// 显示音程/音符数，不为了"看起来更聪明"去猜一个可能错误的和弦名。
+const CHORD_SHAPES = [
+  { name: '大三和弦', intervals: [0,4,7] },
+  { name: '小三和弦', intervals: [0,3,7] },
+  { name: '减三和弦', intervals: [0,3,6] },
+  { name: '增三和弦', intervals: [0,4,8] },
+  { name: '属七和弦', intervals: [0,4,7,10] },
+  { name: '大七和弦', intervals: [0,4,7,11] },
+  { name: '小七和弦', intervals: [0,3,7,10] },
+  { name: '半减七和弦', intervals: [0,3,6,10] },
+  { name: '挂二和弦', intervals: [0,2,7] },
+  { name: '挂四和弦', intervals: [0,5,7] },
+];
+const INTERVAL_NAMES = { 1:'小二度', 2:'大二度', 3:'小三度', 4:'大三度', 5:'纯四度', 6:'三全音', 7:'纯五度', 8:'小六度', 9:'大六度', 10:'小七度', 11:'大七度', 12:'八度' };
+
+function detectChordName(pitches) {
+  const sortedPitches = [...pitches].sort((a, b) => a - b);
+  const classes = [...new Set(sortedPitches.map(p => ((p % 12) + 12) % 12))];
+  if (classes.length < 3) return '';
+  // 分解和弦（如夜曲左手）最低音通常就是根音，优先试它，其它音再依次兜底。
+  const bassClass = ((sortedPitches[0] % 12) + 12) % 12;
+  const candidateRoots = [bassClass, ...classes.filter(c => c !== bassClass)];
+  for (const root of candidateRoots) {
+    const normalized = [...new Set(classes.map(pc => ((pc - root + 12) % 12)))].sort((a, b) => a - b).join(',');
+    const shape = CHORD_SHAPES.find(s => [...s.intervals].sort((a, b) => a - b).join(',') === normalized);
+    if (shape) return `${PITCH_NAMES[root]} ${shape.name}`;
+  }
+  return '';
+}
+
+function describeNoteGroup(pitches) {
+  if (!pitches.length) return '';
+  if (pitches.length === 1) return practiceLetterName(pitches[0]);
+  if (pitches.length === 2) {
+    const span = Math.abs(pitches[1] - pitches[0]);
+    const name = INTERVAL_NAMES[Math.min(span, 12)] || `${span}半音`;
+    return `${practiceLetterName(Math.min(...pitches))} ${name}`;
+  }
+  return detectChordName(pitches) || `${pitches.length} 音和弦`;
+}
 
 function svgEl(tag, attrs = {}, text = '') {
   const node = document.createElementNS(SVG_NS, tag);
@@ -2531,6 +2593,10 @@ function renderCourseDetail() {
       ${course.bpm} BPM · ${course.measure_count} 小节 · ${course.lessons.filter(l=>l.completed).length}/${course.lessons.length} 关卡完成
     </div>
     <div class="course-progress-track" style="margin-bottom:16px;"><div class="course-progress-fill" style="width:${courseProgress(course)}%"></div></div>
+    ${course.hand_tracks.left != null ? `
+    <div class="empty-hint" style="text-align:left; padding:10px 12px; margin-bottom:16px;">
+      🧩 实验中：<a href="/nocturne-left-hand/?course=${encodeURIComponent(course.course_id)}&from=0&to=8" target="_blank" rel="noopener">左手手型练习室</a>——把左手和弦拆成"认识手型 → 弹低音 → 弹和弦"几步慢练，接了真实指法和 MIDI 判分，目前只覆盖前 8 小节（在 Issue #4 逐步推广中）。
+    </div>` : ''}
     ${renderMasterySummary(state.activeCourseMastery)}
     ${sections}
     ${renderMeasureLoopForm(course)}
@@ -2736,7 +2802,65 @@ function midiNoteName(n) {
 const FINGER_NAMES = { 1: '拇指', 2: '食指', 3: '中指', 4: '无名指', 5: '小指' };
 const REQUIRED_RUNS_BY_STAGE = { A: 2, B: 3, C: 4, manual: 3 };
 
+function chordShapeStripHtml(notes) {
+  const sorted = [...notes].sort((a, b) => a.note - b.note);
+  const pitches = sorted.map(n => n.note);
+  const minP = Math.min(...pitches);
+  const maxP = Math.max(...pitches);
+  const span = Math.max(maxP - minP, 7); // 至少留一个纯五度的视觉空间，单音/窄音程不会挤在一起
+  const base = minP - 2;
+  const padded = span + 4;
+  const dots = sorted.map(n => {
+    const pct = ((n.note - base) / padded) * 100;
+    const black = [1, 3, 6, 8, 10].includes(((n.note % 12) + 12) % 12);
+    return `<div class="practice-chord-dot${black ? ' black' : ''}" style="left:${pct.toFixed(1)}%" title="${escapeHtml(midiNoteName(n.note))}">${n.finger ?? ''}</div>`;
+  }).join('');
+  return `<div class="practice-chord-shape-strip">${dots}</div>`;
+}
+
+// 把"这一刻要同时按下的音"从音名列表升级成一个手型示意：按手分组、
+// 标注和弦/音程名，再把每个音摆在一条按实际音高排布的横条上——
+// 对应 Issue #4「和弦对象化显示」，先只做视觉层，不引入新的后端数据。
+function renderPracticeChordShapes(event) {
+  const byHand = { left: [], right: [] };
+  for (const note of event.notes) {
+    if (note.hand === 'left') byHand.left.push(note);
+    else if (note.hand === 'right') byHand.right.push(note);
+  }
+  const blocks = ['left', 'right'].map(hand => {
+    const notes = byHand[hand];
+    if (!notes.length) return '';
+    const roleClass = hand === 'right' ? 'role-right' : (notes.length >= 2 ? 'role-left-chord' : 'role-left-bass');
+    const label = describeNoteGroup(notes.map(n => n.note));
+    return `
+      <div class="practice-chord-shape-hand ${roleClass}">
+        <div class="practice-chord-shape-label"><span class="practice-chord-shape-hand-name">${HAND_LABEL[hand]}</span><span class="practice-chord-shape-name">${escapeHtml(label)}</span></div>
+        ${chordShapeStripHtml(notes)}
+      </div>`;
+  }).join('');
+  if (!blocks) return '';
+  return `<div class="practice-chord-shape" aria-label="当前和弦手型示意">${blocks}</div>`;
+}
+
+// 只有这首曲子的 MIDI 里真的有踏板标记（p.hasPedalData）才显示，宁可不显示
+// 也不要在没有踏板数据的曲子上常驻一个永远"抬起"的提示——那种沉默的假信息
+// 比不显示更容易误导初学者。不踩且这一刻也没有变化时同样不渲染，避免变成
+// 每个音符下面都常驻的噪音，只在"需要做动作"或"正踩着别松"时才出现。
+function renderPracticePedalIndicator(p, event) {
+  if (!p?.hasPedalData || !event) return '';
+  const down = !!event.pedalDown;
+  const changed = !!event.pedalChange;
+  let cls, icon, text;
+  if (changed && down) { cls = 'change-down'; icon = '⬇'; text = '踩下踏板'; }
+  else if (changed && !down) { cls = 'change-up'; icon = '⬆'; text = '松开踏板'; }
+  else if (down) { cls = 'holding'; icon = '●'; text = '保持踩住'; }
+  else return '';
+  return `<div class="practice-pedal-indicator ${cls}" aria-label="踏板提示"><span class="practice-pedal-icon">${icon}</span>${text}</div>`;
+}
+
 function renderPracticeFingerGuide(p, event) {
+  const pedalIndicator = renderPracticePedalIndicator(p, event);
+  const chordShapes = renderPracticeChordShapes(event);
   const cards = event.notes.map(note => {
     const hand = HAND_LABEL[note.hand] || note.hand || '本手';
     const keyboardKey = p.inputMode === 'computer-keyboard'
@@ -2757,6 +2881,8 @@ function renderPracticeFingerGuide(p, event) {
   }).join('');
   return `
     <section class="practice-finger-guide" aria-label="当前音符的手指和键位提示">
+      ${pedalIndicator}
+      ${chordShapes}
       <div class="practice-finger-title">当前音的手指与键位</div>
       <div class="practice-finger-list">${cards}</div>
     </section>`;
@@ -2817,6 +2943,7 @@ async function openPracticeSession(courseId, lessonId, options = {}) {
     state.practice.practiceMode = practiceData.practiceMode || 'wait';
     state.practice.ticksPerQuarter = practiceData.ticksPerQuarter;
     state.practice.effectiveBpm = practiceData.effectiveBpm;
+    state.practice.hasPedalData = practiceData.hasPedalData;
     state.practice.session = createPracticeSession(state.practice, practiceData.events);
     state.practice.result = state.practice.session.getResult();
     startContinuousClockIfNeeded(state.practice);
@@ -2864,6 +2991,7 @@ async function openMeasureLoopPractice(courseId, measureIndex, handMode, options
     if (!p || p.mode !== 'loop' || p.courseId !== courseId || p.measureIndex !== measureIndex) return; // navigated away while loading
     p.measureCount = course.measure_count;
     p.events = practiceData.events;
+    p.hasPedalData = practiceData.hasPedalData;
     p.sheet = practiceData.sheet;
     p.sheet.eventIndexToLocal = new Map(practiceData.sheet.targetEventIndexes.map((index, localIndex) => [index, localIndex]));
     p.session = PracticeScoring.createWaitModeSession(practiceData.events);

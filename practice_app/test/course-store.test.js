@@ -168,3 +168,70 @@ test('calculateStarCount distinguishes a pass, a stable run, and a perfect run',
   assert.equal(store.calculateStarCount({ accuracy: 0.95, maxCombo: 5, totalEvents: 20, correctEvents: 19 }, condition), 2);
   assert.equal(store.calculateStarCount({ accuracy: 1, maxCombo: 4, totalEvents: 4, correctEvents: 4, wrongEvents: 0, extraNotes: 0 }, condition), 3);
 });
+
+// Issue #4 第二片「踏板辅助」：annotateEventsWithPedal 决定练习页要不要显示
+// "踩下/换踏板"提示。四个事件覆盖四种边界情况——切片开始时踏板已经踩下、
+// 踏板中途松开、又立刻在下一个事件之前重新踩下、以及踏板保持不变（不该
+// 误报"换踏板"）。
+test('annotateEventsWithPedal reports pedalDown/pedalChange per event, including the no-change case', () => {
+  const events = [
+    { tick: 0 }, { tick: 480 }, { tick: 960 }, { tick: 1440 },
+  ];
+  const pedalEvents = [
+    { tick: 0, down: true },
+    { tick: 480, down: false },
+    { tick: 481, down: true },
+  ];
+  const annotations = store.annotateEventsWithPedal(events, pedalEvents);
+  assert.deepEqual(annotations, [
+    { pedalDown: true, pedalChange: true },  // 踏板在这个音之前/同时踩下
+    { pedalDown: false, pedalChange: true }, // 松开
+    { pedalDown: true, pedalChange: true },  // 松开后又立刻踩下（tick 481 落在上一个事件之后）
+    { pedalDown: true, pedalChange: false }, // 期间没有再变化，不应报"换踏板"
+  ]);
+});
+
+test('annotateEventsWithPedal treats pedal-down-before-the-slice as an initial state, not a change cue', () => {
+  const events = [{ tick: 1000 }, { tick: 2000 }];
+  // 踏板早在这段练习范围开始之前就踩下了——用户不需要在第一个音上做任何动作。
+  const pedalEvents = [{ tick: 100, down: true }];
+  const annotations = store.annotateEventsWithPedal(events, pedalEvents);
+  assert.deepEqual(annotations, [
+    { pedalDown: true, pedalChange: false },
+    { pedalDown: true, pedalChange: false },
+  ]);
+});
+
+test('annotateEventsWithPedal returns all-false when the MIDI has no pedal markings', () => {
+  const events = [{ tick: 0 }, { tick: 480 }];
+  assert.deepEqual(store.annotateEventsWithPedal(events, []), [
+    { pedalDown: false, pedalChange: false },
+    { pedalDown: false, pedalChange: false },
+  ]);
+});
+
+test('getLessonPracticeData exposes hasPedalData:false and all-false per-event flags for a course whose MIDI has no pedal markings', () => {
+  // 复用本文件顶部已创建的 __test_twinkle__ 课程（小星星双手版源文件没有踏板标记）。
+  const course = store.loadCourse(TEST_COURSE_ID);
+  const data = store.getLessonPracticeData(TEST_COURSE_ID, course.lessons[0].lesson_id);
+  assert.equal(data.hasPedalData, false);
+  assert.ok(data.events.length > 0);
+  assert.ok(data.events.every(e => e.pedalDown === false && e.pedalChange === false));
+});
+
+test('getMeasurePracticeData exposes real pedal data end-to-end for a course whose MIDI has sustain pedal markings (青花瓷)', () => {
+  // qinghuaci 是 seedDefaultCourses 预生成的真实课程（05_qinghuaci/04_原速_107bpm.mid 含 206 个
+  // CC64 事件），只读取，不修改它的进度数据。前几个小节踏板事件足够密集，扫描前 10 个小节应该能
+  // 命中至少一次 pedalChange，用来证明数据真的从 MIDI 一路透传到了 practice-data 接口，而不是
+  // 死代码。
+  store.seedDefaultCourses(path.join(__dirname, '..', '..', 'practice_midis'));
+  const course = store.loadCourse('qinghuaci');
+  let sawPedalChange = false;
+  for (let i = 0; i < Math.min(10, course.measure_count); i++) {
+    const data = store.getMeasurePracticeData('qinghuaci', i, 'both');
+    assert.equal(data.hasPedalData, true, `measure ${i} should report hasPedalData:true for a course with real pedal markings`);
+    assert.ok(data.events.every(e => typeof e.pedalDown === 'boolean' && typeof e.pedalChange === 'boolean'));
+    if (data.events.some(e => e.pedalChange)) sawPedalChange = true;
+  }
+  assert.ok(sawPedalChange, 'expected at least one pedalChange in the first 10 measures of a piece with dense pedal markings');
+});

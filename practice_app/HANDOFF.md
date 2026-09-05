@@ -1,5 +1,67 @@
 # 交接文档
 
+## 2026-09-04 更新：GitHub Issue #4 第二阶段（踏板辅助）
+
+- 接着第一阶段（和弦手型可视化）往下做。目标是 Issue #4「核心问题 4：增加踏板辅助」，范围收得很
+  窄：只做"当前这一刻踏板该踩/该松/保持踩住"的实时提示，不做整曲踏板时间轴、不做踏板准确度评分。
+- `lib/analyze.js` 新增 `extractPedalEvents(midi)`：扫描所有轨道的 CC64（延音踏板）controller
+  事件，`value>=64` 记为踩下，合并连续同状态的冗余重发。**空数组是合法结果**——公版库里肖邦夜曲
+  Op.9 No.2 的 Mutopia MIDI 实测完全没有踏板标记（只有 150 个 CC7 音量事件），跟这份 MIDI 本身的
+  制谱方式有关，不是代码 bug；青花瓷（`05_qinghuaci/*.mid`）和巴赫前奏曲则有真实踏板数据（分别
+  ~50-206 个 / 12 个 CC64 事件），验证用的就是青花瓷。
+- `lib/course-store.js` 新增 `annotateEventsWithPedal(events, pedalEvents)`：给一段已经按 tick 排
+  好序的练习事件标注 `pedalDown`（这一刻踏板是否踩着，跨切片边界正确延续之前的状态）和
+  `pedalChange`（相对上一个事件，踏板状态是否变化过，对应"这里需要做动作"）。已加入
+  `module.exports`（和 `buildHandEvents`/`applyCourseFingering` 一样导出，方便单元测试直接调）。
+  `buildPracticeDataFromSelection()` 里接入：`events` 数组的每一项现在多了 `pedalDown`/
+  `pedalChange` 两个布尔字段，顶层多了 `hasPedalData`（= 这首曲子的 MIDI 里到底有没有踏板标记，
+  前端用它决定要不要显示踏板 UI，没有就完全不渲染，不显示一个永远"抬起"的假提示）。
+- `public/index.html` 新增 `renderPracticePedalIndicator(p, event)`，接在 `renderPracticeFingerGuide`
+  顶部（在和弦手型面板之上）。三种状态：`change-down`（亮黄，"⬇ 踩下踏板"）、`change-up`（灰，
+  "⬆ 松开踏板"）、`holding`（浅黄，"● 保持踩住"）；不踩且没有变化时不渲染，避免变成每个音符下面
+  都有的常驻噪音。`openPracticeSession`/`openMeasureLoopPractice` 两条进入练习页的路径都同步透传
+  了 `hasPedalData` 到 `state.practice`。
+- 测试：`test/analyze.test.js` 新增 3 个用例覆盖 `extractPedalEvents`（读取/合并冗余重发/无标记
+  曲子返回空数组）；`test/course-store.test.js` 新增 5 个用例——2 个是 `annotateEventsWithPedal`
+  的精确边界测试（切片开始前踏板已踩下、松开后立刻重新踩下、以及"没变化不应误报"），2 个是端到端
+  集成测试（用已有的 `__test_twinkle__` 测试课程验证无踏板数据时全部返回 false，用真实的
+  `qinghuaci` 课程——只读，没碰它的进度数据——验证前 10 个小节里至少真的出现过一次 `pedalChange`，
+  证明数据确实从 MIDI 一路透传到了接口，不是死代码）。`node --test test/*.test.js` 从 83 → **91/91**
+  全过。
+- 视觉验证：起了临时端口（3799，验证完已停），用青花瓷课程 Playwright 截图确认了三种状态在真实
+  数据下都渲染正确（`holding` 是真实练习流程里截的图，`change-down` 用真实数据构造，`change-up`
+  当时没能在前 10 小节里正好碰上，用同一个渲染函数手动构造了一个事件对象截图确认，逻辑已经被上面
+  的单元测试精确覆盖，不依赖这张截图当证据）。
+- 还没做（留给 Issue #4 后续 PR）：模式 B/C、独立的手型训练模式、配色体系推广到整曲谱面——这三项
+  和第一阶段结尾列的一样，本次没有往下推进；踏板这条线自身也还有余量：目前只提示"这一刻"，没有像
+  Issue 原文 mockup 里"提前预告下一次换踏板"的前瞻提示，如果后续验证发现"看到提示才反应已经晚了"，
+  可以在当前数据结构上很容易加一层"预告下一个 change 事件"，不需要改后端。
+
+## 2026-09-04 更新：GitHub Issue #4 第一阶段（和弦手型可视化）
+
+- 新 Issue：[youyi666/Neothesia#4](https://github.com/youyi666/Neothesia/issues/4)「重构钢琴练习视觉交互：
+  从 MIDI 跟随播放器升级为 AI 钢琴陪练模式」。这是一个很大的根问题（三种练习模式、踏板系统、和弦对象化
+  显示、统一配色体系），按 Issue 里"实施原则"约定不拆成多个新 Issue，本次只做了其中最小可验证的第一片：
+  **和弦对象化显示**（Issue 正文「核心问题 1」）。其余（踏板辅助、模式 B/C、专门的 Chord Practice 模式、
+  跨谱面的统一配色）都还没做，留给后续同一 Issue 下的 PR。
+- 做了什么：`public/index.html` 新增 `detectChordName()`/`describeNoteGroup()`（一个面向初学者的启发式
+  和弦/音程命名器，纯前端，不依赖新的后端数据——直接复用 `fingering-engine.js` 早就在算的 `note.finger`）
+  和 `renderPracticeChordShapes()`（按手分组，画一条按实际音高比例排布的横条，每个音一个圆点标手指号），
+  接到 `renderPracticeFingerGuide()` 顶部，练习页原有的文字卡片列表原样保留在下面。配色按 Issue 建议：
+  右手绿色、左手单音（低音）蓝色、左手同时多音（和弦/音程）紫色——**只加在这个新面板里，没有改整曲谱面
+  `practiceNoteTone()` 的配色**，那套颜色是"对/错/当前/未练"的练习状态反馈，价值更高，不能被手部配色
+  抢掉，这是有意的取舍，不是遗漏。
+- 和弦命名是启发式规则模型（同 `fingering-engine.js` 一贯的定位），只覆盖常见三和弦/七和弦，匹配不到就
+  退化显示音程名或"N 音和弦"，不会为了好看硬猜一个可能错的名字。用肖邦夜曲 Op.9 No.2 实测：能正确识别出
+  `D♯ 大三和弦`（降E大调主和弦的第一转位）等真实和弦。
+- 验证方式：`node --test test/*.test.js` 83/83 通过（纯前端改动，不影响现有测试覆盖范围）；额外起了
+  `chopin_nocturne_9_2` 课程的真实练习会话，用 Playwright 截图核对了单音/双手同时/三音和弦三种场景在
+  桌面宽度和 390×844 移动宽度下的排布，颜色和换行都符合预期。
+- 还没做（Issue #4 后续阶段，故意没有一次做完）：踏板辅助（`lib/midi-file.js` 其实已经在解析 CC 事件，
+  含延音踏板 CC64，只是 `analyze.js`/`course-store.js` 的 practice-data 接口目前会把它们丢弃，没有导出
+  给前端——这是接下来做踏板系统时的现成切入点）；独立的「手型训练/Chord Practice」模式；模式 B（演奏
+  模式/五线谱为主）和模式 C（拆解模式）；把配色体系推广到整曲谱面视图。
+
 ## 2026-09-01 更新：GitHub Issue #2 第一阶段（课程策略重构）
 
 - `generateDefaultLessons()`（`lib/course-store.js`）对双手曲目改成了"小节闭环课程"：
