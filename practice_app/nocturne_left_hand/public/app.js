@@ -92,10 +92,50 @@ function buildKeyboard(){
   const lo=Math.min(24,...allNotes); // C1
   const hi=Math.max(96,...allNotes); // C7
   const whites=[];for(let n=lo;n<=hi;n++)if(!isBlack(n))whites.push(n);const count=whites.length;let content='';for(let n=lo;n<=hi;n++){const black=isBlack(n);const pos=black?whites.filter(v=>v<n).length-.31:whites.indexOf(n);content+=`<button class="piano-key ${black?'black':'white'}" data-midi="${n}" style="left:${pos/count*100}%;width:${(black?.62:1)/count*100}%" aria-label="试听 ${name(n)}"><span class="key-note">${name(n)}</span></button>`;}$('keyboard').innerHTML=content;$('keyboard').addEventListener('click',e=>{const key=e.target.closest('[data-midi]');if(key)listenOne(Number(key.dataset.midi));});}
-function drawScoreInto(targetId,notes,fs,color){let svg='<svg viewBox="0 0 560 155" role="img" aria-label="当前音组的低音谱号音高对照">';for(let y=40;y<=104;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
-  svg+='<path d="M51 69c-17-12-13-31 3-31 22 0 20 35-9 52m2-44a4 4 0 1 0 0 .1" stroke="#b6c6b4" stroke-width="2.4" fill="none"/><circle cx="73" cy="48" r="2" fill="#b6c6b4"/><circle cx="73" cy="64" r="2" fill="#b6c6b4"/>';
+// 低音谱号用真实的音乐符号字形（跟主应用 public/index.html 的 drawClef 同一种
+// 做法：Unicode 𝄢 配 Segoe UI Symbol/Noto Music 字体），不再用手绘贝塞尔曲线
+// 模拟谱号——那条曲线画得歪歪扭扭，是这个原型最明显的"难看"来源。
+//
+// 谱表竖直位置是按当前要显示的音符动态算的，不是写死 staffTop=40：接入真实课程
+// 数据后发现左手音域跨度很大（跨 13 首含左手数据的课程实测 MIDI 24-88，两倍多
+// 八度——不是所有"左手"音符都乖乖待在低音谱表附近，跨手弹奏、琶音上冲很常见），
+// 固定坐标系下高于 F4 的音会直接画到 viewBox 外面、无声无息地消失（不是没弹对，
+// 是压根没画出来，2026-09-05 用真实肖邦夜曲数据复现过这个 bug）。STEP_PX 保持
+// 每音级 8px 不变（谱表间距、谱号字号都按这个比例定的，不能变，否则谱号会跟谱线
+// 对不上），只让"谱表在画布里贴多低/贴多高"这一个自由度随当前音符移动。
+const STEP_PX=8;
+const STAFF_BOTTOM_STEP=18; // 低音谱表底线 = G2
+const STAFF_TOP_STEP=26;    // 低音谱表顶线 = A3
+const LETTER_STEP={C:0,D:1,E:2,F:3,G:4,A:5,B:6};
+function noteStep(n){return octave(n)*7+LETTER_STEP[pitch(n)[0]];}
+function computeStaffBottomY(steps){
+  const allSteps=[...steps,STAFF_BOTTOM_STEP,STAFF_TOP_STEP];
+  const maxStep=Math.max(...allSteps),minStep=Math.min(...allSteps);
+  const topMargin=14,bottomMargin=34; // bottomMargin 给下面的音名/指法文字行（固定画在 y=145）留够空间
+  const minBound=topMargin+(maxStep-STAFF_BOTTOM_STEP)*STEP_PX;
+  const maxBound=(155-bottomMargin)+(minStep-STAFF_BOTTOM_STEP)*STEP_PX;
+  if(minBound<=maxBound) return Math.min(Math.max(104,minBound),maxBound);
+  return (minBound+maxBound)/2; // 音域跨度大到画布放不下时两头各让一点，不让某一端整个消失
+}
+function noteY(step,staffBottomY){return staffBottomY-(step-STAFF_BOTTOM_STEP)*STEP_PX;}
+function drawStaffLines(svg,staffBottomY){
+  const top=staffBottomY-(STAFF_TOP_STEP-STAFF_BOTTOM_STEP)*STEP_PX;
+  svg+=`<path d="M35 ${top}V${staffBottomY}" stroke="#596c63" stroke-width="1.4"/>`;
+  for(let y=top;y<=staffBottomY;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
+  svg+=`<text x="38" y="${staffBottomY-5}" font-size="72" font-family="Segoe UI Symbol, Noto Music, serif" fill="#b6c6b4">\u{1D122}</text>`;
+  return svg;
+}
+function drawLedgerLines(svg,x,y,staffBottomY,width,color='#83968a'){
+  const top=staffBottomY-(STAFF_TOP_STEP-STAFF_BOTTOM_STEP)*STEP_PX;
+  for(let ledger=staffBottomY+16;ledger<=y;ledger+=16)svg+=`<path d="M${x-width/2} ${ledger}h${width}" stroke="${color}"/>`;
+  for(let ledger=top-16;ledger>=y;ledger-=16)svg+=`<path d="M${x-width/2} ${ledger}h${width}" stroke="${color}"/>`;
+  return svg;
+}
+function drawScoreInto(targetId,notes,fs,color){
+  const staffBottomY=computeStaffBottomY(notes.map(noteStep));
+  let svg='<svg viewBox="0 0 560 155" role="img" aria-label="当前音组的低音谱号音高对照">';svg=drawStaffLines(svg,staffBottomY);
   const gap=notes.length>1?Math.min(140,420/(notes.length-1)):0;
-  notes.forEach((n,i)=>{const letters={C:0,D:1,E:2,F:3,G:4,A:5,B:6};const step=octave(n)*7+letters[pitch(n)[0]];const y=104-(step-(2*7+4))*8;const x=notes.length===1?260:162+i*gap;for(let ledger=120;ledger<=y;ledger+=16)svg+=`<path d="M${x-17} ${ledger}h34" stroke="#83968a"/>`;for(let ledger=24;ledger>=y;ledger-=16)svg+=`<path d="M${x-17} ${ledger}h34" stroke="#83968a"/>`;svg+=`<g class="score-tone" data-midi="${n}" tabindex="0" role="button" aria-label="试听 ${name(n)}"><ellipse cx="${x}" cy="${y}" rx="10" ry="6.5" transform="rotate(-17 ${x} ${y})" fill="${color}"/>${pitch(n).includes('♭')?`<text x="${x-27}" y="${y+5}" font-size="24" fill="${color}">♭</text>`:''}<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${name(n)} · ${fs[i]} 指</text></g>`;});svg+='</svg>';$(targetId).innerHTML=svg;}
+  notes.forEach((n,i)=>{const y=Math.max(4,Math.min(150,noteY(noteStep(n),staffBottomY)));const x=notes.length===1?260:162+i*gap;svg=drawLedgerLines(svg,x,y,staffBottomY,34);svg+=`<g class="score-tone" data-midi="${n}" tabindex="0" role="button" aria-label="试听 ${name(n)}"><ellipse cx="${x}" cy="${y}" rx="10" ry="6.5" transform="rotate(-17 ${x} ${y})" fill="${color}"/>${pitch(n).includes('♭')?`<text x="${x-27}" y="${y+5}" font-size="24" fill="${color}">♭</text>`:''}<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${name(n)} · ${fs[i]} 指</text></g>`;});svg+='</svg>';$(targetId).innerHTML=svg;}
 function drawScore(){drawScoreInto('score',currentNotes(),currentFingers(),state.phase===1?'#9cbedd':'#c5b1e8');}
 // 连续演奏用的谱面条：跟 drawScoreInto 不一样，drawScoreInto 只画"当前一个
 // 音组"（分步骤模式一次只练一组，够用）；连续演奏是往下弹的，只看当前这
@@ -103,11 +143,8 @@ function drawScore(){drawScoreInto('score',currentNotes(),currentFingers(),state
 // 什么"。当前事件放大、加亮，后面几个缩小、变暗，一眼能分清"现在"和
 // "接下来"。
 function drawContinuousScoreStrip(targetId,events){
-  const letters={C:0,D:1,E:2,F:3,G:4,A:5,B:6};
-  const yFor=(n)=>{const step=octave(n)*7+letters[pitch(n)[0]];return 104-(step-(2*7+4))*8;};
-  let svg='<svg viewBox="0 0 560 155" role="img" aria-label="接下来几个音符的谱面对照">';
-  for(let y=40;y<=104;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
-  svg+='<path d="M51 69c-17-12-13-31 3-31 22 0 20 35-9 52m2-44a4 4 0 1 0 0 .1" stroke="#b6c6b4" stroke-width="2.4" fill="none"/><circle cx="73" cy="48" r="2" fill="#b6c6b4"/><circle cx="73" cy="64" r="2" fill="#b6c6b4"/>';
+  const staffBottomY=computeStaffBottomY(events.flatMap(e=>e.notes.map(n=>noteStep(n.note))));
+  let svg='<svg viewBox="0 0 560 155" role="img" aria-label="接下来几个音符的谱面对照">';svg=drawStaffLines(svg,staffBottomY);
   const startX=115,endX=512;
   const stepX=events.length>1?(endX-startX)/(events.length-1):0;
   events.forEach((event,i)=>{
@@ -117,9 +154,8 @@ function drawContinuousScoreStrip(targetId,events){
     if(isCurrent)svg+=`<rect x="${x-16}" y="30" width="32" height="112" fill="#2f2a3d" opacity=".55" rx="4"/>`;
     const notesSorted=[...event.notes].sort((a,b)=>a.note-b.note);
     notesSorted.forEach(n=>{
-      const y=yFor(n.note);
-      for(let ledger=120;ledger<=y;ledger+=16)svg+=`<path d="M${x-13} ${ledger}h26" stroke="#83968a"/>`;
-      for(let ledger=24;ledger>=y;ledger-=16)svg+=`<path d="M${x-13} ${ledger}h26" stroke="#83968a"/>`;
+      const y=Math.max(4,Math.min(150,noteY(noteStep(n.note),staffBottomY)));
+      svg=drawLedgerLines(svg,x,y,staffBottomY,26);
       const rx=isCurrent?9:6,ry=isCurrent?6:4;
       svg+=`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-17 ${x} ${y})" fill="${color}"/>`;
     });
