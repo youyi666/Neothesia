@@ -24,7 +24,8 @@
     .hand-picker .segmented{display:flex;background:#121a1c;padding:3px;border-radius:7px;border:1px solid #283335}
     .hand-picker .segmented button{border:0;background:none;color:#8d9d99;font-size:11px;padding:7px 14px;border-radius:5px;min-height:32px}
     .hand-picker .segmented button.selected{background:#34423c;color:#d7e7cc}
-    .hand-picker .segmented button.selected.right{background:#2a3c2f;color:#cfe7cf}
+    .hand-picker .segmented button#hand-pick-right.selected{background:#2a3c2f;color:#cfe7cf}
+    .hand-picker .segmented button#hand-pick-both.selected{background:#3c3423;color:#e7dccf}
     .hand-picker small{color:var(--muted);font-size:10px}
     .empty-state{color:var(--muted);font-size:12px;padding:30px 0;text-align:center}
     [hidden]{display:none!important}
@@ -53,6 +54,7 @@
         <div class="segmented" role="tablist" aria-label="选择练习的手">
           <button id="hand-pick-left" role="tab" data-hand="left">左手</button>
           <button id="hand-pick-right" role="tab" data-hand="right">右手</button>
+          <button id="hand-pick-both" role="tab" data-hand="both">双手同时</button>
         </div>
         <small id="hand-picker-hint"></small>
       </div>
@@ -88,15 +90,22 @@ function renderLevelList(){
     </a>`).join('');
 }
 
+// 双手同时需要左右两条音轨都存在（跟左手一样，只有 13 首含左手数据的曲子能选），
+// 不是一个独立的第三种数据要求——course.hand_tracks 只有 left/right 两个字段。
+function handAvailable(course,hand){
+  return hand==='both'?course.hand_tracks.left!=null:course.hand_tracks[hand]!=null;
+}
+
 function setHand(hand){
-  // 只有那只手真的有音轨（hand_tracks[hand] != null）才允许选中；两个按钮都在，
-  // 缺数据的那只手禁用并说明原因，而不是直接不显示按钮——不显示会让人以为
-  // "这首曲子只能选一只手"是理所当然的，禁用+提示能说清楚"为什么现在选不了"。
-  if(currentCourse.hand_tracks[hand]==null) return;
+  // 只有那只手真的有数据才允许选中；三个按钮都在，缺数据的禁用并说明原因，而
+  // 不是直接不显示按钮——不显示会让人以为"这首曲子只能选这些"是理所当然的，
+  // 禁用+提示能说清楚"为什么现在选不了"。
+  if(!handAvailable(currentCourse,hand)) return;
   currentHand=hand;
   $('hand-pick-left').classList.toggle('selected',hand==='left');
   $('hand-pick-right').classList.toggle('selected',hand==='right');
-  $('hand-picker-hint').textContent=hand==='right'?'右手音轨对每首曲子都有':'这首曲子有左手数据';
+  $('hand-pick-both').classList.toggle('selected',hand==='both');
+  $('hand-picker-hint').textContent=hand==='right'?'右手音轨对每首曲子都有':hand==='both'?'两只手一起弹，没有单独的手型示意图':'这首曲子有左手数据';
   renderLevelList();
   history.replaceState(null,'',`select.html?course=${encodeURIComponent(currentCourse.course_id)}&hand=${hand}`);
 }
@@ -107,9 +116,10 @@ function showLevelView(course,preferHand){
   $('level-view').hidden=false;
   $('level-course-name').textContent=course.title;
   $('level-course-meta').textContent=`${course.bpm} BPM · 共 ${course.measure_count} 小节`;
-  $('hand-pick-left').disabled=course.hand_tracks.left==null;
-  $('hand-pick-right').disabled=course.hand_tracks.right==null;
-  const hand=preferHand&&course.hand_tracks[preferHand]!=null?preferHand:(course.hand_tracks.left!=null?'left':'right');
+  $('hand-pick-left').disabled=!handAvailable(course,'left');
+  $('hand-pick-right').disabled=!handAvailable(course,'right');
+  $('hand-pick-both').disabled=!handAvailable(course,'both');
+  const hand=preferHand&&handAvailable(course,preferHand)?preferHand:(handAvailable(course,'left')?'left':'right');
   setHand(hand);
 }
 
@@ -147,6 +157,7 @@ async function init(){
   $('back-to-courses').onclick=(e)=>{e.preventDefault();showCourseView();};
   $('hand-pick-left').onclick=()=>setHand('left');
   $('hand-pick-right').onclick=()=>setHand('right');
+  $('hand-pick-both').onclick=()=>setHand('both');
 
   const params=new URLSearchParams(location.search);
   const preselect=params.get('course');
