@@ -22,13 +22,13 @@ node practice_app/server.cjs
 
 ## 开机自启 + 公网访问（可选）
 
-不想每次手动开关、想在家里以外也能打开，可以用 [keep-alive.ps1](./keep-alive.ps1)：注册成 Windows 计划任务后，登录时自动启动 `practice_app` 服务器 + 一条 Cloudflare 隧道（`cloudflared tunnel --url`），并且每 5 分钟巡检一次，服务器或隧道掉线会自动重连，不需要人工干预。
+不想每次手动开关、想在家里以外也能打开，可以用 [keep-alive.ps1](./keep-alive.ps1)：注册成 Windows 计划任务后，登录时自动启动 `practice_app` 服务器 + 一条 Cloudflare 隧道（`cloudflared tunnel --url`），并且每 5 分钟巡检一次，服务器或隧道掉线会自动重连，不需要人工干预。全程无头运行——进程本身 `-WindowStyle Hidden`，计划任务定义也带 `-Hidden`（两个独立的"隐藏"开关都要设，少一个都可能在某些 Windows 版本上闪一下窗口），不会跳窗口、不会自己打开浏览器、不会弹通知，用电脑做别的事时不会被打扰。
 
 ```powershell
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "D:\Neothesia\practice_app\keep-alive.ps1"'
 $TriggerLogon = New-ScheduledTaskTrigger -AtLogOn
 $TriggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
-$Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+$Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
 Register-ScheduledTask -TaskName "PianoPracticeAppKeepAlive" -Action $Action -Trigger @($TriggerLogon, $TriggerRepeat) -Settings $Settings -Force
 ```
 
