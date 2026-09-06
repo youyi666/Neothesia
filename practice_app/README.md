@@ -20,6 +20,20 @@ node practice_app/server.cjs
 默认监听 `http://localhost:3721`（局域网内手机可用 `http://<本机IP>:3721` 访问）。需要彻底关闭后台服务时，双击 [停止练琴App.bat](./停止练琴App.bat)。
 每次启动会自动检查曲库里是否有还没生成课程的曲子，自动补上（已存在的课程不会被覆盖，进度不会丢）。
 
+## 开机自启 + 公网访问（可选）
+
+不想每次手动开关、想在家里以外也能打开，可以用 [keep-alive.ps1](./keep-alive.ps1)：注册成 Windows 计划任务后，登录时自动启动 `practice_app` 服务器 + 一条 Cloudflare 隧道（`cloudflared tunnel --url`），并且每 5 分钟巡检一次，服务器或隧道掉线会自动重连，不需要人工干预。
+
+```powershell
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "D:\Neothesia\practice_app\keep-alive.ps1"'
+$TriggerLogon = New-ScheduledTaskTrigger -AtLogOn
+$TriggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
+$Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName "PianoPracticeAppKeepAlive" -Action $Action -Trigger @($TriggerLogon, $TriggerRepeat) -Settings $Settings -Force
+```
+
+用的是 Cloudflare **免账号的快速隧道**（不需要域名、不需要登录），所以公网地址是一个随机生成的 `*.trycloudflare.com`，每次隧道重启（重启电脑、或掉线被自动重连）都会换成新地址——当前地址随时可以打开 `data/current-tunnel-url.txt` 查看，不用每次都去问。这个地址没有密码门禁，任何拿到地址的人都能看到/操作里面真实的练习数据，是当前已知的限制，详见 [Issue #6](https://github.com/youyi666/Neothesia/issues/6)（正式域名 + 门禁属于后续可选项，不是这次要做的）。
+
 ## 课程系统怎么用
 
 1. 打开网页就会看到「继续练习」和已经生成好的课程列表，点「开始评分练习」即可。
