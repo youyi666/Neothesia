@@ -14,6 +14,10 @@ const TO_MEASURE = Math.max(FROM_MEASURE + 1, Number(params.get('to')) || FROM_M
 // 变成全部 35 首，不用等每首曲子都补出"能配对出低音+和弦"的左手数据。
 const HAND = ['right','both'].includes(params.get('hand')) ? params.get('hand') : 'left';
 const HAND_LABEL = HAND === 'right' ? '右手' : HAND === 'both' ? '双手' : '左手';
+// 复用主应用 state.currentUser 那一套用户概念（默认'罗俊生'，跟主应用一致），
+// 让服务器端进度存档能按人分开——主应用课程详情页的入口链接会带上
+// &user=当前用户，这里只是兜底默认值，不是这个页面自己发明的新身份系统。
+const USER = params.get('user') || '罗俊生';
 // 原来是一个全局固定的 key（'neothesia-nocturne-practice-v1'），不分课程/手/小节
 // 范围——这套页面本来只服务一首夜曲，够用；但现在能练全部 35 首曲目 × 三种手，
 // 不按 (课程,手,小节范围) 分开存的话，练完 A 曲子的手型再去练 B 曲子，
@@ -156,10 +160,26 @@ const currentFingers=()=>{
   return fingers();
 };
 const announce=(message)=>{$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2600);};
-function save(){try{localStorage.setItem(STORAGE,JSON.stringify({group:state.group,phase:state.phase,done:state.done,tempo:state.tempo,pedal:state.pedal}));}catch{$('save-status').textContent='此浏览器未允许保存进度';}}
-function restoreSavedState(){
+// 进度双写：localStorage 保留（离线也能用、读取零延迟），同时 fire-and-forget
+// 一份到服务器（独立存档，见 course-store.js savePracticeRoomProgress 的注释——
+// 跟真实课程的星级/达标完全分开）。服务器写失败（离线、服务器重启中）不阻塞
+// UI，也不重试——下一次任何状态变化都会再 save() 一次，短暂丢一次不影响使用。
+function save(){
+  const payload={group:state.group,phase:state.phase,done:state.done,tempo:state.tempo,pedal:state.pedal};
+  try{localStorage.setItem(STORAGE,JSON.stringify(payload));}catch{$('save-status').textContent='此浏览器未允许保存进度';}
+  fetch('/api/practice-room-progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:USER,course:COURSE_ID,hand:HAND,from:FROM_MEASURE,to:TO_MEASURE,...payload})}).catch(()=>{});
+}
+async function restoreSavedState(){
+  // 服务器有记录就优先用服务器的（更持久，换设备/清缓存也在）；服务器没有
+  // （新用户、或者是这次上线之前就存在的旧 localStorage 记录）才退回本地存档，
+  // 不会让"服务器还没来得及写"误判成"从来没练过"。
+  let old=null;
   try{
-    const old=JSON.parse(localStorage.getItem(STORAGE)||'null');
+    const res=await fetch(`/api/practice-room-progress?user=${encodeURIComponent(USER)}&course=${encodeURIComponent(COURSE_ID)}&hand=${encodeURIComponent(HAND)}&from=${FROM_MEASURE}&to=${TO_MEASURE}`);
+    if(res.ok){const body=await res.json();old=body.progress;}
+  }catch{}
+  try{
+    if(!old) old=JSON.parse(localStorage.getItem(STORAGE)||'null');
     if(!old) return;
     if(Number.isInteger(old.group)&&old.group>=0&&old.group<GROUPS.length) state.group=old.group;
     if(Number.isInteger(old.phase)&&old.phase>=0&&old.phase<phaseTextFor(GROUPS[state.group]?.kind).phases.length) state.phase=old.phase;
@@ -750,7 +770,7 @@ async function init(){
     HAS_PEDAL_DATA=hasPedal;
     RAW_EVENTS=rawEvents;
     TICKS_PER_QUARTER=ticksPerQuarter;
-    restoreSavedState();
+    await restoreSavedState();
     $('piece-subtitle-real').textContent=`${course.title} · 第 ${FROM_MEASURE+1}-${Math.min(TO_MEASURE,course.measure_count)} 小节 · 真实课程数据`;
     // 大标题原来写死"肖邦夜曲"——?course= 换成别的曲子时必须跟着变，不然会
     // 显示"贝多芬：致爱丽丝"的数据却顶着"肖邦夜曲"的标题，明显误导。

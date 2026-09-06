@@ -65,6 +65,10 @@
 <script>
 const $=(id)=>document.getElementById(id);
 const CHUNK_SIZE=8;
+// 从主应用课程详情页进来的链接会带 &user=当前用户，转手继续带给每个关卡链接，
+// 这样服务器端的练习进度存档（跟真实课程星级完全分开，见 course-store.js）
+// 才能落到正确的人头上，不是所有人共用一份记录。
+const USER=new URLSearchParams(location.search).get('user')||'罗俊生';
 let currentCourse=null,currentHand='left';
 
 function chunksFor(measureCount){
@@ -84,7 +88,7 @@ function showCourseView(){
 function renderLevelList(){
   const chunks=chunksFor(currentCourse.measure_count);
   $('level-list').innerHTML=chunks.map((c,i)=>`
-    <a class="course-card" href="index.html?course=${encodeURIComponent(currentCourse.course_id)}&hand=${currentHand}&from=${c.from}&to=${c.to}">
+    <a class="course-card" href="index.html?course=${encodeURIComponent(currentCourse.course_id)}&hand=${currentHand}&from=${c.from}&to=${c.to}&user=${encodeURIComponent(USER)}">
       <strong>关 ${String(i+1).padStart(2,'0')}</strong>
       <small>第 ${c.from+1}-${c.to} 小节</small>
     </a>`).join('');

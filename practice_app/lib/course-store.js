@@ -188,6 +188,44 @@ function updateSettings(patch) {
   return settings;
 }
 
+// 左手手型练习室（nocturne_left_hand）的手动练习进度独立存档——跟真实课程的
+// lessons[].completed/star/达标次数完全分开，不互相影响。原因：练习室的"一组"
+// 跟真实课程的"一关"粒度不一样（练习室按 8 小节一段，真实左手关卡按 2 小节一段
+// 生成，一段练习室的关对应 4 个真实关卡），而且判定标准也不一样（练习室是"挨个
+// 认过手型"，真实课程是"MIDI 连续弹对整段、按难度累计达标 2-4 次"）——把这两种
+// 不同的能力认证混在一起，会让"已完成"这个状态变得不可靠。这份存档只解决"进度
+// 只存在浏览器 localStorage、换设备/清缓存就丢"的问题，不冒充真实课程进度。
+// 按 user 分（复用主应用 state.currentUser 那一套用户概念，同一个家庭账号下
+// 罗俊生/李俊各自的练习记录不应该互相覆盖），一个用户一个 course 一个文件，
+// 文件内部再按 `hand:from-to` 分 key，避免每个 8 小节段都单独建一个文件。
+const PRACTICE_ROOM_PROGRESS_ROOT = path.join(APP_ROOT, 'data', 'practice_room_progress');
+function safeSegment(value) {
+  return String(value || '').replace(/[^A-Za-z0-9_\-一-鿿]/g, '_') || '_';
+}
+function practiceRoomProgressPath(user, courseId) {
+  return path.join(PRACTICE_ROOM_PROGRESS_ROOT, safeSegment(user), `${safeSegment(courseId)}.json`);
+}
+function practiceRoomProgressKey(hand, from, to) {
+  return `${safeSegment(hand)}:${Number(from)}-${Number(to)}`;
+}
+function readPracticeRoomProgress(user, courseId, hand, from, to) {
+  try {
+    const all = JSON.parse(fs.readFileSync(practiceRoomProgressPath(user, courseId), 'utf8'));
+    return all[practiceRoomProgressKey(hand, from, to)] || null;
+  } catch {
+    return null;
+  }
+}
+function savePracticeRoomProgress(user, courseId, hand, from, to, data) {
+  const filePath = practiceRoomProgressPath(user, courseId);
+  let all = {};
+  try { all = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+  all[practiceRoomProgressKey(hand, from, to)] = { ...data, updated_at: new Date().toISOString() };
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, JSON.stringify(all, null, 2), 'utf8');
+  return all[practiceRoomProgressKey(hand, from, to)];
+}
+
 function pad3(n) {
   return String(n).padStart(3, '0');
 }
@@ -1345,6 +1383,8 @@ module.exports = {
   exportLessonFile,
   readSettings,
   updateSettings,
+  readPracticeRoomProgress,
+  savePracticeRoomProgress,
   seedDefaultCourses,
   loadDrillManifest,
   buildHandEvents,

@@ -161,6 +161,40 @@ test('readSettings/updateSettings persist the last opened MIDI and practice resu
   }
 });
 
+test('readPracticeRoomProgress/savePracticeRoomProgress round-trip and stay isolated per (hand, range) and from real lesson data', () => {
+  const testUser = '__test_user__';
+  const progressFile = path.join(__dirname, '..', 'data', 'practice_room_progress', testUser, `${TEST_COURSE_ID}.json`);
+  const courseBefore = JSON.stringify(store.loadCourse(TEST_COURSE_ID));
+  try {
+    // 保存前查询：还没有任何记录时应该是 null，不是抛错或返回一个假的空对象。
+    assert.equal(store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'left', 0, 8), null);
+
+    const saved = store.savePracticeRoomProgress(testUser, TEST_COURSE_ID, 'left', 0, 8, {
+      group: 3, phase: 1, done: [0, 1, 2], tempo: 56, pedal: true,
+    });
+    assert.equal(saved.group, 3);
+    assert.ok(saved.updated_at, 'savePracticeRoomProgress 应该自动盖时间戳');
+
+    const restored = store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'left', 0, 8);
+    assert.deepEqual(restored.done, [0, 1, 2]);
+    assert.equal(restored.tempo, 56);
+
+    // 同一个用户、同一首课程，换一只手或换一段小节范围，必须是完全独立的记录——
+    // 不能因为共用一个文件就互相覆盖（这正是本次要修的"练习室进度互相覆盖"那类坑）。
+    assert.equal(store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'right', 0, 8), null);
+    assert.equal(store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'left', 8, 16), null);
+    store.savePracticeRoomProgress(testUser, TEST_COURSE_ID, 'right', 0, 8, { group: 9, phase: 0, done: [], tempo: 48, pedal: false });
+    assert.deepEqual(store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'left', 0, 8).done, [0, 1, 2]);
+    assert.equal(store.readPracticeRoomProgress(testUser, TEST_COURSE_ID, 'right', 0, 8).group, 9);
+
+    // 这套存档必须跟真实课程的 lessons[].completed 完全独立——写练习室进度不应该
+    // 触碰 course.json 里任何一个字节的真实关卡数据。
+    assert.equal(JSON.stringify(store.loadCourse(TEST_COURSE_ID)), courseBefore);
+  } finally {
+    fs.rmSync(path.dirname(progressFile), { recursive: true, force: true });
+  }
+});
+
 test('calculateStarCount distinguishes a pass, a stable run, and a perfect run', () => {
   const condition = { consecutive_successes: 3, minimum_accuracy: 0.9 };
   assert.equal(store.calculateStarCount({ accuracy: 0.89, maxCombo: 3, totalEvents: 10 }, condition), 0);

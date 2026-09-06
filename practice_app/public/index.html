@@ -2595,7 +2595,7 @@ function renderCourseDetail() {
     <div class="course-progress-track" style="margin-bottom:16px;"><div class="course-progress-fill" style="width:${courseProgress(course)}%"></div></div>
     ${course.hand_tracks.left != null ? `
     <div class="empty-hint" style="text-align:left; padding:10px 12px; margin-bottom:16px;">
-      🧩 实验中：<a href="/nocturne-left-hand/select.html?course=${encodeURIComponent(course.course_id)}" target="_blank" rel="noopener">左手手型练习室</a>——把左手和弦拆成"认识手型 → 弹低音 → 弹和弦"几步慢练，接了真实指法和 MIDI 判分；选关页面按 8 小节一段列出这首曲子的全部小节，不再只限前 8 小节。
+      🧩 实验中：<a href="/nocturne-left-hand/select.html?course=${encodeURIComponent(course.course_id)}&user=${encodeURIComponent(state.currentUser)}" target="_blank" rel="noopener">手型练习室</a>——把和弦拆成"认识手型 → 弹低音 → 弹和弦"几步慢练，支持左手/右手/双手同时，接了真实指法和 MIDI 判分；选关页面按 8 小节一段列出这首曲子的全部小节。练习进度会按当前用户（${escapeHtml(state.currentUser)}）独立存到服务器，跟这里的关卡星级/达标次数是两套数据，互不影响。
     </div>` : ''}
     ${renderMasterySummary(state.activeCourseMastery)}
     ${sections}

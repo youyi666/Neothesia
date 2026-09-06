@@ -295,6 +295,29 @@ async function handleApi(req, res, requestPath, url) {
     return true;
   }
 
+  // ── 左手手型练习室（nocturne_left_hand）的独立进度存档 ──
+  // 跟真实课程的 lessons[].completed/star 完全分开，见 course-store.js 里
+  // savePracticeRoomProgress 的注释——不是同一套完成度认证，不要在这里合并。
+  if (requestPath === '/api/practice-room-progress' && req.method === 'GET') {
+    const user = url.searchParams.get('user') || '';
+    const course = url.searchParams.get('course') || '';
+    const hand = url.searchParams.get('hand') || '';
+    const from = Number(url.searchParams.get('from'));
+    const to = Number(url.searchParams.get('to'));
+    sendJson(res, 200, { progress: store.readPracticeRoomProgress(user, course, hand, from, to) });
+    return true;
+  }
+  if (requestPath === '/api/practice-room-progress' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const { user, course, hand, from, to, ...data } = body || {};
+    if (!user || !course || !hand || !Number.isFinite(from) || !Number.isFinite(to)) {
+      sendJson(res, 400, { error: 'user/course/hand/from/to 都是必填' });
+      return true;
+    }
+    sendJson(res, 200, { progress: store.savePracticeRoomProgress(user, course, hand, from, to, data) });
+    return true;
+  }
+
   return false;
 }
 
