@@ -2,3 +2,29 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 @media(max-width:680px){body{padding-bottom:85px}.advance-controls{position:fixed;z-index:4;bottom:0;left:0;right:0;width:auto;background:#16201ff5;backdrop-filter:blur(14px);border-top:1px solid #3a4a40;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px))}.transport{padding-bottom:16px}.toast{bottom:91px}}
+
+/* 支持右手（Issue #4）：右手练习时整页从蓝/紫（左手低音/和弦）配色切到绿色调
+   （建议色，右手旋律=绿色），由 app.js 在 body 上加 .hand-right 类触发。手型示意图
+   的路径部分（手掌轮廓/掌纹）用 CSS 镜像——手指圆点位置和"L/R"字母改由 app.js
+   直接改写坐标/文字，数字本身不能跟着 CSS 一起镜像（"2""3"等镜像后变成认不出的
+   反字），只镜像形状、不镜像文字，是刻意的分工，不是遗漏。 */
+body.hand-right .hand-tag{color:var(--green);border-color:#3f5c46;background:#1c2a20}
+body.hand-right .note-card:hover,body.hand-right .note-card.sounding{background:#243a2a;border-color:var(--green)}
+body.hand-right .note-card.note-bass{background:#1e3327;border-color:#4c7a53}
+body.hand-right .note-card.note-bass.sounding{background:#284a30}
+body.hand-right .note-bass .note-label{color:#c9eed2}
+body.hand-right .note-bass .note-cn{color:#a7cbac}
+body.hand-right .finger-circle{background:var(--green);color:#1c331f}
+body.hand-right .note-bass .finger-circle{background:#8ecf8e}
+body.hand-right .piano-key .key-finger{background:var(--green);color:#1c331f}
+body.hand-right .piano-key.bass .key-finger{background:#d7f0d2;color:#1c331f}
+body.hand-right .piano-key.target.white{background:linear-gradient(#ddecc9,#c1dea3);box-shadow:inset 0 -4px #93bb79;color:#2c3c24}
+body.hand-right .piano-key.target.black{background:linear-gradient(#4f7d55,#7ba482);color:#effff2;border-color:#9dc8a0}
+body.hand-right .piano-key.target.bass.white{background:linear-gradient(#cfe6c3,#a3d18d);color:#233824;box-shadow:inset 0 -4px #6ea36e}
+body.hand-right .piano-key.target.bass.black{background:linear-gradient(#4a7350,#7fab7f);color:#effff2;border-color:#9ccb9c}
+body.hand-right .hand-illustration g.active circle{fill:var(--green);stroke:#8ecf8e}
+body.hand-right .hand-illustration g.active text{fill:#1c331f;font-weight:600}
+body.hand-right .hand-illustration g.active.bass circle{fill:#8ecf8e;stroke:#8ecf8e}
+body.hand-right .hand-l{fill:#3a5c40}
+body.hand-right #hand-shape,body.hand-right #hand-crease{transform-box:view-box;transform-origin:140px 0px;transform:scaleX(-1)}
+body.hand-right .score-tone:hover ellipse{fill:#d7ecc7}

@@ -9,11 +9,45 @@ const params = new URLSearchParams(location.search);
 const COURSE_ID = params.get('course') || 'chopin_nocturne_9_2';
 const FROM_MEASURE = Math.max(0, Number(params.get('from')) || 0);
 const TO_MEASURE = Math.max(FROM_MEASURE + 1, Number(params.get('to')) || FROM_MEASURE + 8);
+// 支持右手：?hand=right 时整页按右手数据加载/判分/配色，默认仍是左手（不传参数时
+// 行为跟改造前完全一致）。所有 35 首曲目都有右手音轨（`hand_tracks.right` 从不为
+// null），左手数据只覆盖 13 首——加上右手支持后，这个练习室能用的曲目从 13 首
+// 变成全部 35 首，不用等每首曲子都补出"能配对出低音+和弦"的左手数据。
+const HAND = params.get('hand') === 'right' ? 'right' : 'left';
+const HAND_LABEL = HAND === 'right' ? '右手' : '左手';
 
 const PITCHES=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
 const CN=['哆','降瑞','瑞','降咪','咪','发','降嗦','嗦','降啦','啦','降西','西'];
 const FINGER_NAMES={1:'拇指',2:'食指',3:'中指',4:'无名指',5:'小指'};
-const PHASES=['认识和弦 · 摆好手型','先弹低音 · 推荐指落键','松开移手 · 和弦落下','保持手型 · 和弦再弹'];
+// 分步骤模式的四个阶段文案按当前音组的"性质"（kind）区分，而不是按左右手区分：
+// 左手夜曲式的"低音+和弦"伴奏型（kind==='chord'）保留原文案；右手旋律或任何
+// 手落单音序列（kind==='melody'，两个相邻单音配成一组）、以及取不到配对的孤立
+// 单音（kind==='single'）各有一套更贴切的文案，不再把"这是个和弦"的措辞套在
+// 明明只是一串单音的旋律上。
+const PHASE_TEXT = {
+  chord: {
+    phases: ['认识和弦 · 摆好手型', '先弹低音 · 推荐指落键', '松开移手 · 和弦落下', '保持手型 · 和弦再弹'],
+    titles: (n) => ['先把手型放好', '先弹一个低音', '松开，再移到和弦', '保持手型，再弹一次'],
+    copies: (n) => [`看清这${n}个落点，让手自然展开。`, '用推荐指法轻弹低音，给移手留出时间。', '眼睛先看下一个落点，手腕放松地带过去。', '手的位置不用变，轻轻抬指后再次落键。'],
+    moveTitle: ['先找到手型，再连接低音', '低音和和弦，分两次弹', '同一个小指，先松开、后落键', '形状不变，轻轻再弹一次'],
+  },
+  melody: {
+    phases: ['认识两个音 · 看清位置', '先弹第一个音', '移到第二个音 · 落键', '两个音再走一遍'],
+    titles: () => ['先看清这两个音', '先弹第一个音', '移到第二个音', '两个音再走一遍'],
+    copies: () => ['看清这两个音分别在哪，不急着弹。', '轻弹第一个音，感受手指落点。', '手指移到第二个音，落键要果断。', '把这两个音再连起来走一遍，熟悉顺序。'],
+    moveTitle: ['先认清两个音的位置', '弹第一个音', '移到第二个音', '再走一遍，巩固顺序'],
+    next: ['音位看清了，弹第一个音', '第一个音弹过了，移过去', '弹了第二个音，再走一遍'],
+  },
+  single: {
+    phases: ['认识这个音 · 找到位置', '弹这个音', '再弹一遍', '保持手型 · 再确认一次'],
+    titles: () => ['先看清这个音在哪', '弹这个音', '再弹一遍', '再确认一次'],
+    copies: () => ['看清这个音的位置，不急着弹。', '落键弹这个音。', '再弹一遍，巩固手感。', '保持手型，再确认一次。'],
+    moveTitle: ['先找到这个音', '弹这个音', '再弹一遍', '再确认一次'],
+    next: ['看清位置，弹这个音', '弹过了，再弹一遍', '弹了一遍，再确认一次'],
+  },
+};
+PHASE_TEXT.chord.next = ['手型就位，练低音', '低音弹过了，练换位', '和弦落下，再弹一次'];
+function phaseTextFor(kind){ return PHASE_TEXT[kind] || PHASE_TEXT.chord; }
 
 // 和弦命名规则跟主应用 public/index.html 里的 detectChordName/describeNoteGroup
 // 是同一套区间表——这个原型是独立静态页面（没有构建步骤、不能 import 主应用的
@@ -51,8 +85,23 @@ const pitch=(n)=>PITCHES[((n%12)+12)%12];
 const octave=(n)=>Math.floor(n/12)-1;
 const name=(n)=>pitch(n)+octave(n);
 const isBlack=(n)=>[1,3,6,8,10].includes(((n%12)+12)%12);
-const currentNotes=()=>state.phase===1?[group().bass]:group().notes;
-const currentFingers=()=>state.phase===1?[group().bassFinger]:fingers();
+// phase 0（认识…）要看清"整个手型将来会用到的全部音"：chord 组的 g.notes 本来就是
+// 完整和弦（含或不含低音都算一个完整形状），直接展示没问题；melody 组的 g.notes
+// 只存了配对里的"第二个音"（bass 字段单独存"第一个音"），如果 phase 0 只显示
+// g.notes 会只看到一半音，所以这里把 bass 拼回去，让"看清两个音"名副其实。single
+// 组不需要这个处理——bass 和 notes 本来就是同一个音，拼接只会重复。
+const currentNotes=()=>{
+  const g=group();
+  if(state.phase===1) return [g.bass];
+  if(state.phase===0&&g.kind==='melody') return [g.bass,...g.notes];
+  return g.notes;
+};
+const currentFingers=()=>{
+  const g=group();
+  if(state.phase===1) return [g.bassFinger];
+  if(state.phase===0&&g.kind==='melody') return [g.bassFinger,...fingers()];
+  return fingers();
+};
 const announce=(message)=>{$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2600);};
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify({group:state.group,phase:state.phase,done:state.done,tempo:state.tempo,pedal:state.pedal}));}catch{$('save-status').textContent='此浏览器未允许保存进度';}}
 function restoreSavedState(){
@@ -103,9 +152,17 @@ function buildKeyboard(){
 // 是压根没画出来，2026-09-05 用真实肖邦夜曲数据复现过这个 bug）。STEP_PX 保持
 // 每音级 8px 不变（谱表间距、谱号字号都按这个比例定的，不能变，否则谱号会跟谱线
 // 对不上），只让"谱表在画布里贴多低/贴多高"这一个自由度随当前音符移动。
+// 右手旋律通常在高音谱号区域（中央C往上），套用低音谱号的话中央C要挂在谱表上方
+// 好几条加线，比在高音谱号（中央C只需一条下加线）难读得多——不是配色/谱号图案
+// 的问题，是谱号本身选错了。所以按 HAND 切谱号：右手用高音谱号（𝄞，底线E4/
+// 顶线F5），左手保持原来的低音谱号（𝄢，底线G2/顶线A3）。
 const STEP_PX=8;
-const STAFF_BOTTOM_STEP=18; // 低音谱表底线 = G2
-const STAFF_TOP_STEP=26;    // 低音谱表顶线 = A3
+const IS_TREBLE=HAND==='right';
+const STAFF_BOTTOM_STEP=IS_TREBLE?30:18; // 高音谱表底线E4 / 低音谱表底线G2
+const STAFF_TOP_STEP=IS_TREBLE?38:26;    // 高音谱表顶线F5 / 低音谱表顶线A3
+const CLEF_CHAR=IS_TREBLE?'\u{1D11E}':'\u{1D122}';
+const CLEF_FONT_SIZE=IS_TREBLE?92:72;
+const CLEF_Y=(staffBottomY)=>IS_TREBLE?staffBottomY+10:staffBottomY-5;
 const LETTER_STEP={C:0,D:1,E:2,F:3,G:4,A:5,B:6};
 function noteStep(n){return octave(n)*7+LETTER_STEP[pitch(n)[0]];}
 function computeStaffBottomY(steps){
@@ -122,7 +179,7 @@ function drawStaffLines(svg,staffBottomY){
   const top=staffBottomY-(STAFF_TOP_STEP-STAFF_BOTTOM_STEP)*STEP_PX;
   svg+=`<path d="M35 ${top}V${staffBottomY}" stroke="#596c63" stroke-width="1.4"/>`;
   for(let y=top;y<=staffBottomY;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
-  svg+=`<text x="38" y="${staffBottomY-5}" font-size="72" font-family="Segoe UI Symbol, Noto Music, serif" fill="#b6c6b4">\u{1D122}</text>`;
+  svg+=`<text x="38" y="${CLEF_Y(staffBottomY)}" font-size="${CLEF_FONT_SIZE}" font-family="Segoe UI Symbol, Noto Music, serif" fill="#b6c6b4">${CLEF_CHAR}</text>`;
   return svg;
 }
 function drawLedgerLines(svg,x,y,staffBottomY,width,color='#83968a'){
@@ -136,7 +193,11 @@ function drawScoreInto(targetId,notes,fs,color){
   let svg='<svg viewBox="0 0 560 155" role="img" aria-label="当前音组的低音谱号音高对照">';svg=drawStaffLines(svg,staffBottomY);
   const gap=notes.length>1?Math.min(140,420/(notes.length-1)):0;
   notes.forEach((n,i)=>{const y=Math.max(4,Math.min(150,noteY(noteStep(n),staffBottomY)));const x=notes.length===1?260:162+i*gap;svg=drawLedgerLines(svg,x,y,staffBottomY,34);svg+=`<g class="score-tone" data-midi="${n}" tabindex="0" role="button" aria-label="试听 ${name(n)}"><ellipse cx="${x}" cy="${y}" rx="10" ry="6.5" transform="rotate(-17 ${x} ${y})" fill="${color}"/>${pitch(n).includes('♭')?`<text x="${x-27}" y="${y+5}" font-size="24" fill="${color}">♭</text>`:''}<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${name(n)} · ${fs[i]} 指</text></g>`;});svg+='</svg>';$(targetId).innerHTML=svg;}
-function drawScore(){drawScoreInto('score',currentNotes(),currentFingers(),state.phase===1?'#9cbedd':'#c5b1e8');}
+// 配色按左右手分：左手沿用原来的蓝（低音相位）/紫（其它相位）；右手统一用绿色调
+// （Issue #4 建议的"右手旋律=绿色"），深浅两档对应"第一个音"和"其余相位"，不需要
+// 像左手那样区分"低音"和"和弦"的语义色——右手大多是旋律音型，没有那个区分。
+const HAND_TONES = { left: ['#9cbedd', '#c5b1e8'], right: ['#7ec98b', '#bfd9aa'] };
+function drawScore(){const[first,rest]=HAND_TONES[HAND];drawScoreInto('score',currentNotes(),currentFingers(),state.phase===1?first:rest);}
 // 连续演奏用的谱面条：跟 drawScoreInto 不一样，drawScoreInto 只画"当前一个
 // 音组"（分步骤模式一次只练一组，够用）；连续演奏是往下弹的，只看当前这
 // 一个音符不知道接下来是什么，得往后多显示几个事件，才知道"接下来要弹
@@ -164,14 +225,14 @@ function drawContinuousScoreStrip(targetId,events){
   svg+='</svg>';
   $(targetId).innerHTML=svg;
 }
-function render(){const g=group(),notes=currentNotes(),fs=currentFingers(),bass=state.phase===1,groupCount=GROUPS.length;$('group-label').textContent=`手型 ${String(state.group+1).padStart(2,'0')} / ${String(groupCount).padStart(2,'0')}`;$('chord-symbol').textContent=g.symbol;$('chord-title').textContent=bass?'先找到左手低音':g.title;$('chord-subtitle').textContent=notes.map(name).join(' · ');$('notes-row').innerHTML=notes.map((n,i)=>`<button class="note-card ${bass?'note-bass':''}" data-midi="${n}" aria-label="试听 ${name(n)}，左手 ${fs[i]} 指，${FINGER_NAMES[fs[i]]}"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');$('note-caption').textContent=bass?'先弹这一个低音':`${notes.length===2?'两个':notes.length===1?'这一个':'几个'}音，一起按下`;
-  for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=notes.indexOf(n);key.classList.toggle('target',index>=0);key.classList.toggle('bass',bass&&index>=0);key.classList.toggle('ghost',!bass&&n===g.bass);key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;key.setAttribute('aria-label',`试听 ${name(n)}${index>=0?`，左手 ${fs[index]} 指`:''}`);}
-  const titles=['先把手型放好','先弹一个低音','松开，再移到和弦','保持手型，再弹一次'];const copies=[`看清这${notes.length}个落点，让手自然展开。`,'用推荐指法轻弹低音，给移手留出时间。','眼睛先看下一个落点，手腕放松地带过去。','手的位置不用变，轻轻抬指后再次落键。'];$('coach-title').textContent=titles[state.phase];$('coach-copy').textContent=copies[state.phase];$('phase-count').textContent=`0${state.phase+1} / 04`;
-  $('phase-list').innerHTML=PHASES.map((p,i)=>`<li class="${i===state.phase?'active':i<state.phase?'finished':''}"><button data-phase="${i}" ${i===state.phase?'aria-current="step"':''}><span class="phase-num">${i<state.phase?'✓':i+1}</span><span>${p}</span>${i===state.phase?'<span class="phase-state">当前</span>':''}</button></li>`).join('');
+function render(){const g=group(),notes=currentNotes(),fs=currentFingers(),bass=state.phase===1,groupCount=GROUPS.length,text=phaseTextFor(g.kind);$('group-label').textContent=`手型 ${String(state.group+1).padStart(2,'0')} / ${String(groupCount).padStart(2,'0')}`;$('chord-symbol').textContent=g.symbol;$('chord-title').textContent=bass?`先找到${HAND_LABEL}第一个音`:g.title;$('chord-subtitle').textContent=notes.map(name).join(' · ');$('notes-row').innerHTML=notes.map((n,i)=>`<button class="note-card ${bass?'note-bass':''}" data-midi="${n}" aria-label="试听 ${name(n)}，${HAND_LABEL} ${fs[i]} 指，${FINGER_NAMES[fs[i]]}"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');$('note-caption').textContent=bass?'先弹这一个音':`${notes.length===2?'两个':notes.length===1?'这一个':'几个'}音，一起按下`;
+  for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=notes.indexOf(n);key.classList.toggle('target',index>=0);key.classList.toggle('bass',bass&&index>=0);key.classList.toggle('ghost',!bass&&n===g.bass);key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;key.setAttribute('aria-label',`试听 ${name(n)}${index>=0?`，${HAND_LABEL} ${fs[index]} 指`:''}`);}
+  const titles=text.titles(notes.length),copies=text.copies(notes.length);$('coach-title').textContent=titles[state.phase];$('coach-copy').textContent=copies[state.phase];$('phase-count').textContent=`0${state.phase+1} / 04`;
+  $('phase-list').innerHTML=text.phases.map((p,i)=>`<li class="${i===state.phase?'active':i<state.phase?'finished':''}"><button data-phase="${i}" ${i===state.phase?'aria-current="step"':''}><span class="phase-num">${i<state.phase?'✓':i+1}</span><span>${p}</span>${i===state.phase?'<span class="phase-state">当前</span>':''}</button></li>`).join('');
   document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.toggle('bass',bass);});
   $('fingering').innerHTML=g.fingerings.map((f,i)=>`<option value="${i}" ${i===state.fingering?'selected':''}>${f.join(' · ')}${i?' · 备选':' · 推荐（自动生成，仅供参考）'}</option>`).join('');$('fingering').disabled=bass;
-  const moveTitle=['先找到手型，再连接低音','低音和和弦，分两次弹','同一个小指，先松开、后落键','形状不变，轻轻再弹一次'];$('move-title').textContent=state.phase===2?'从低音移到和弦音':moveTitle[state.phase];$('move-text').textContent=state.phase===0?`把 ${fingers().join('、')} 指轻放在标记琴键上。蓝色空心点是稍后要弹的低音。`:state.phase===1?'先单独练准低音，不需要把手一直撑在低音与和弦之间。':state.phase===2?g.move:'不要重新找键。保持自然的手型，抬起手指后同时弹下。';
-  $('next').innerHTML=['手型就位，练低音','低音弹过了，练换位','和弦落下，再弹一次',state.group===groupCount-1?'完成这一轮练习':'这组练过了，下一组'][state.phase]+' <span>→</span>';$('previous').disabled=state.group===0&&state.phase===0;
+  const moveTitle=text.moveTitle;$('move-title').textContent=state.phase===2?(g.kind==='chord'?'从低音移到和弦音':'移到第二个音'):moveTitle[state.phase];$('move-text').textContent=state.phase===0?`把 ${fingers().join('、')} 指轻放在标记琴键上。${g.kind==='chord'?'蓝色空心点是稍后要弹的低音。':'空心点是稍后要弹的音。'}`:state.phase===1?(g.kind==='chord'?'先单独练准低音，不需要把手一直撑在低音与和弦之间。':'先单独练准这个音，不用抢拍。'):state.phase===2?g.move:'不要重新找键。保持自然的手型，抬起手指后同时弹下。';
+  $('next').innerHTML=[...text.next,state.group===groupCount-1?'完成这一轮练习':'这组练过了，下一组'][state.phase]+' <span>→</span>';$('previous').disabled=state.group===0&&state.phase===0;
   $('group-list').innerHTML=GROUPS.map((gr,i)=>`<button class="group-card ${i===state.group?'current':''}" data-group="${i}" ${i===state.group?'aria-current="true"':''} aria-label="练习第 ${i+1} 组：${gr.title}${state.done.includes(i)?'，已手动练习':''}"><span class="group-num">0${i+1}</span><span><strong>${gr.symbol}</strong><small>${gr.hint}</small></span><span class="group-status">${state.done.includes(i)?'✓':i===state.group?'·':''}</span></button>`).join('');$('progress-number').innerHTML=state.done.length+`<span>/ ${groupCount}</span>`;$('session-title').textContent=`今天，从 ${groupCount} 组开始`;$('progress-ring').style.background=`conic-gradient(var(--green) ${state.done.length*100/groupCount}%,#35443d 0%)`;$('progress-caption').textContent=state.done.length?`已手动练习 ${state.done.length} 组`:'手动记录 · 不赶进度';$('journey-status').textContent=state.done.length?`已手动练习 ${state.done.length} / ${groupCount} 组`:`${groupCount} 组手型 · 按自己的节奏`;
   $('tempo').value=state.tempo;$('tempo-value').value=state.tempo;
   $('pedal-toggle').disabled=!HAS_PEDAL_DATA;$('pedal-toggle').setAttribute('aria-checked',String(state.pedal));$('pedal-detail').hidden=!state.pedal;
@@ -207,7 +268,7 @@ let midiAccess=null,midiInputs=[],midiStatus='idle';
 let scoringKey=null,scoringSession=null;
 
 function scoringNotesForCurrentPhase(){
-  return currentNotes().map(n=>({note:n,hand:'left'}));
+  return currentNotes().map(n=>({note:n,hand:HAND}));
 }
 
 // 阶段没变、只是 MIDI 连接状态变了（比如刚连上/断开）时，也要能刷新这行提示，
@@ -432,7 +493,7 @@ function renderContinuous(){
   $('chord-subtitle').textContent=pitches.map(name).join(' · ');
   $('note-caption').textContent=`${pitches.length===1?'这一个':pitches.length===2?'两个':'几个'}音，弹对自动前进`;
   $('play-feedback').textContent='跟着弹，弹对自动前进，弹错会标红提示';
-  $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，左手 ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
+  $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，${HAND_LABEL} ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
   drawContinuousScoreStrip('continuous-score-strip',RAW_EVENTS.slice(idx,idx+6));
   for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=pitches.indexOf(n);key.classList.toggle('target',index>=0);key.classList.remove('bass','ghost');key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;}
   document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.remove('bass');});
@@ -477,61 +538,75 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){stopAudio();return;
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAudio();});window.addEventListener('pagehide',stopAudio);window.addEventListener('resize',centerKeyboard);
 
 // ── 真实数据接入（Issue #4 任务 1：接入真实课程数据 / 任务 2 的指法部分）──────
-// 把 practice-data 接口返回的、已经按 onset 分组的左手事件，两两配对成
-// "低音 → 和弦" 的手型组：夜曲左手是标准的 oom-pah 伴奏型（先弹一个低音，
-// 再弹一组和弦），MIDI 里这两步天生就是两个相邻但不同时刻的独立事件，
-// 不是同一个事件里的和弦，所以不能直接把每个事件当一组——要识别"单音后面
-// 跟着一个多音和弦"这个真实存在的模式，配对失败（比如连续两个单音、或者
-// 和弦前面没有单独的低音）时退化成"该和弦自己的最低音当低音"，不假装有一个
-// 实际不存在的独立低音动作。
+// 把 practice-data 接口返回的、已经按 onset 分组的单手事件，配成一组组"手型"。
+// 三种配对结果（kind）：
+// - 'chord'：单音后面跟着一个多音和弦——夜曲左手标准的 oom-pah 伴奏型（先弹一个
+//   低音，再弹一组和弦），MIDI 里这两步天生是两个相邻但不同时刻的独立事件。
+// - 'melody'：两个相邻的单音——右手旋律、或任何单手弹一串单音的段落，这种情况下
+//   不存在"低音"，把第一个音当"低音"字段复用只是为了共享同一套四阶段练习框架，
+//   实际文案（PHASE_TEXT.melody）不会说"低音"或"和弦"。这一支是支持右手旋律的
+//   关键——右手音轨基本全是单音序列，没有它就只能退化成下面的 single 分支，
+//   每组都是同一个音重复四遍。
+// - 'single'：取不到配对对象的孤立单音（数据范围末尾剩一个音，或前面没有单独低音
+//   的和弦自己也够不成 chord/melody 组合）——如实标成"单音"练习，不假装有配对。
 function pairEventsIntoGroups(events){
   const groups=[];
   for(let i=0;i<events.length;i++){
     const cur=events[i];
     const nxt=events[i+1];
     if(cur.notes.length===1&&nxt&&nxt.notes.length>=2){
-      groups.push({bassEvent:cur,chordEvent:nxt});
+      groups.push({bassEvent:cur,chordEvent:nxt,kind:'chord'});
       i++; // 消费掉这两个事件
+    }else if(cur.notes.length===1&&nxt&&nxt.notes.length===1){
+      groups.push({bassEvent:cur,chordEvent:nxt,kind:'melody'});
+      i++;
     }else{
       const chordEvent=cur.notes.length>=1?cur:null;
       if(!chordEvent) continue;
       const sorted=[...chordEvent.notes].sort((a,b)=>a.note-b.note);
-      groups.push({bassEvent:{notes:[sorted[0]]},chordEvent:{notes:sorted}});
+      groups.push({bassEvent:{notes:[sorted[0]]},chordEvent:{notes:sorted},kind:sorted.length>=2?'chord':'single'});
     }
   }
   return groups;
 }
 
 function buildGroupFromPair(pair,prevGroup){
+  const kind=pair.kind;
   const bassNote=pair.bassEvent.notes[0];
   const chordNotes=[...pair.chordEvent.notes].sort((a,b)=>a.note-b.note);
   const pitches=chordNotes.map(n=>n.note);
   let symbol=pitch(bassNote.note),title;
-  if(pitches.length>=3){
+  if(kind==='chord'&&pitches.length>=3){
     const detected=detectChordName(pitches);
     // 大字母符号必须跟识别出的和弦根音一致——夜曲左手经常是转位（低音不是根音，
     // 比如 B♭3·E♭4·G4 实际是降E大三和弦的第一转位），不能直接拿低音音名当符号，
     // 那样会和下面 title 里真正识别出的和弦名对不上。
     if(detected){symbol=PITCHES[detected.root];title=`${symbol} ${detected.name}`;if(/七/.test(detected.name))symbol+='7';}
     else title=`${pitches.length} 音和弦（真实谱例，未匹配到标准和弦名）`;
-  }else if(pitches.length===2){
+  }else if(kind==='chord'&&pitches.length===2){
     const span=Math.abs(pitches[1]-pitches[0]);
     title=`双音骨架 · ${INTERVAL_NAMES[Math.min(span,12)]||span+'半音'}`;
+  }else if(kind==='melody'){
+    title=`${name(bassNote.note)} → ${name(pitches[0])}`;
   }else{
     title='单音';
   }
-  const hint=pitches.length>=3?(title.includes('未匹配')?'和弦 · 真实谱例':'三音和弦 · 真实谱例'):pitches.length===2?'双音骨架 · 真实谱例':'单音 · 真实谱例';
+  const hint=kind==='chord'?(pitches.length>=3?(title.includes('未匹配')?'和弦 · 真实谱例':'三音和弦 · 真实谱例'):'双音骨架 · 真实谱例'):kind==='melody'?'旋律音型 · 真实谱例':'单音 · 真实谱例';
   const fingersReal=chordNotes.map(n=>Number.isInteger(n.finger)?n.finger:1);
   const bassFinger=Number.isInteger(bassNote.finger)?bassNote.finger:5;
-  const move=!prevGroup
-    ?`把 ${fingersReal.join('、')} 指轻放在标记琴键上，先熟悉这一个手型。`
-    :(()=>{const distance=bassNote.note-prevGroup.bass;const dir=distance===0?'':(distance>0?'向右移':'向左移');
-      return distance===0
-        ?`低音停在同一个键 ${name(bassNote.note)} 上，松开后原位置再落键，再让 ${fingersReal.join('、')} 指落到和弦。`
-        :`小指从 ${name(prevGroup.bass)} ${dir}到 ${name(bassNote.note)}，整只手跟着移动，再一起落下 ${fingersReal.join('、')} 指。`;})();
+  const move=kind==='chord'
+    ?(!prevGroup
+      ?`把 ${fingersReal.join('、')} 指轻放在标记琴键上，先熟悉这一个手型。`
+      :(()=>{const distance=bassNote.note-prevGroup.bass;const dir=distance===0?'':(distance>0?'向右移':'向左移');
+        return distance===0
+          ?`低音停在同一个键 ${name(bassNote.note)} 上，松开后原位置再落键，再让 ${fingersReal.join('、')} 指落到和弦。`
+          :`小指从 ${name(prevGroup.bass)} ${dir}到 ${name(bassNote.note)}，整只手跟着移动，再一起落下 ${fingersReal.join('、')} 指。`;})())
+    :kind==='melody'
+      ?`${bassFinger} 指弹 ${name(bassNote.note)}，松开后 ${fingersReal[0]} 指落到 ${name(pitches[0])}。`
+      :`用 ${bassFinger} 指弹 ${name(bassNote.note)}，就这一个音，不用移手。`;
   return {
     symbol,title,notes:pitches,bass:bassNote.note,bassFinger,
-    fingerings:[fingersReal],hint,move,
+    fingerings:[fingersReal],hint,move,kind,
     fingerSource:chordNotes[0]?.fingerSource||'generated',
   };
 }
@@ -554,7 +629,7 @@ async function loadRealGroups(){
   const events=[];
   let hasPedal=false,ticksPerQuarter=384;
   for(let m=FROM_MEASURE;m<lastMeasure;m++){
-    const res=await fetch(`/api/courses/${encodeURIComponent(COURSE_ID)}/measures/${m}/practice-data?hand_mode=left`);
+    const res=await fetch(`/api/courses/${encodeURIComponent(COURSE_ID)}/measures/${m}/practice-data?hand_mode=${HAND}`);
     if(!res.ok) continue; // 单个小节请求失败不阻断整体加载，跳过继续拼后面的小节
     const data=await res.json();
     if(data.hasPedalData) hasPedal=true;
@@ -563,7 +638,7 @@ async function loadRealGroups(){
     // 不是 practice-data 接口自带的字段——这里按真实抓取到的小节号手动补上。
     for(const event of data.events) if(event.notes.length) events.push({...event,measure:m});
   }
-  if(!events.length) throw new Error(`第 ${FROM_MEASURE+1}-${lastMeasure} 小节没有左手音符事件`);
+  if(!events.length) throw new Error(`第 ${FROM_MEASURE+1}-${lastMeasure} 小节没有${HAND_LABEL}音符事件`);
 
   const pairs=pairEventsIntoGroups(events);
   const groups=[];
@@ -586,11 +661,45 @@ async function init(){
     // 大标题原来写死"肖邦夜曲"——?course= 换成别的曲子时必须跟着变，不然会
     // 显示"贝多芬：致爱丽丝"的数据却顶着"肖邦夜曲"的标题，明显误导。
     $('page-title-piece').textContent=course.title;
-    document.title=`${course.title} · 左手手型 · Neothesia`;
+    document.title=`${course.title} · ${HAND_LABEL}手型 · Neothesia`;
   }catch(e){
     showLoadError(e.message);
     return;
   }
   buildKeyboard();render();
 }
+// 页面上跟"当前是左手还是右手"绑定的静态文案/图形，只需要在加载真实数据之前
+// 应用一次（这些元素本来就在 HTML 里，不是 render() 按当前手型组重新生成的）。
+// 手型示意图是照左手画的（1 拇指在右、5 小指在左），右手时整张图水平镜像：
+// 路径部分（.hand-shape/.hand-crease）交给 CSS transform 做镜像（见 style.css
+// 的 body.hand-right 规则），手指圆点和数字改成 JS 直接改写坐标——数字本身不能
+// 跟着 CSS 一起镜像（"2""3""4""5"镜像后会变成认不出的反字），所以只挪位置、
+// 不镜像文字本身，位置用 280(viewBox宽)-原x 手动算镜像坐标。
+const HAND_FINGER_POS = { 5: [38, 52], 4: [60, 18], 3: [96, 6], 2: [135, 19], 1: [193, 75] };
+function applyHandChrome(){
+  const isRight = HAND === 'right';
+  document.body.classList.toggle('hand-right', isRight);
+  $('hand-svg')?.classList.toggle('hand-right', isRight);
+  if (isRight) {
+    document.querySelectorAll('#hand-svg [data-finger]').forEach(g => {
+      const [x, y] = HAND_FINGER_POS[Number(g.dataset.finger)];
+      g.setAttribute('transform', `translate(${280 - x} ${y})`);
+    });
+    const label = $('hand-letter-big');
+    if (label) { label.textContent = 'R'; label.setAttribute('x', String(280 - 213)); }
+  }
+  if ($('hand-letter')) $('hand-letter').textContent = isRight ? 'R' : 'L';
+  if ($('hand-tag-label')) $('hand-tag-label').textContent = HAND_LABEL;
+  if ($('hand-scope-label')) $('hand-scope-label').textContent = `${HAND_LABEL}专项`;
+  if ($('hand-title-light')) $('hand-title-light').textContent = `${HAND_LABEL}手型`;
+  $('hand-illustration')?.setAttribute('aria-label', isRight ? '右手指法示意，从拇指 1 到小指 5' : '左手指法示意，从小指 5 到拇指 1');
+  if ($('hand-illustration-caption')) $('hand-illustration-caption').textContent = isRight ? '右手手背视角 · 1 是拇指' : '左手手背视角 · 1 是拇指';
+  if ($('score-clef-label')) $('score-clef-label').textContent = isRight ? '高音谱号 · 单组放大' : '低音谱号 · 单组放大';
+  if (isRight) {
+    if ($('legend-bass')) $('legend-bass').hidden = true;
+    if ($('legend-chord')) $('legend-chord').hidden = true;
+    if ($('legend-melody')) $('legend-melody').hidden = false;
+  }
+}
+applyHandChrome();
 init();

@@ -14,7 +14,7 @@
   </header>
   <main>
     <section class="intro" aria-labelledby="page-title">
-      <div><div class="eyebrow"><span class="tiny-line"></span>慢练计划 <span>/</span> 左手专项</div><h1 id="page-title"><span id="page-title-piece">加载中…</span><span class="title-dot"> · </span><span class="title-light">左手和弦</span></h1><p>一次只看一组音，慢慢找到手的位置。</p></div>
+      <div><div class="eyebrow"><span class="tiny-line"></span>慢练计划 <span>/</span> <span id="hand-scope-label">左手专项</span></div><h1 id="page-title"><span id="page-title-piece">加载中…</span><span class="title-dot"> · </span><span class="title-light" id="hand-title-light">左手和弦</span></h1><p>一次只看一组音，慢慢找到手的位置。</p></div>
       <div class="session-stat"><div class="stat-ring" id="progress-ring"><span id="progress-number">0<span>/ 4</span></span></div><div><strong id="session-title">加载中…</strong><small id="progress-caption">手动记录 · 不赶进度</small></div></div>
     </section>
     <section class="practice" aria-label="和弦练习区">
@@ -30,7 +30,7 @@
       </div>
       <div class="practice-grid">
         <div class="instrument-panel">
-          <div class="chord-heading"><div><div class="eyebrow" id="group-label">手型 01 / 04</div><div class="chord-name"><h2 id="chord-symbol">E♭</h2><div><strong id="chord-title">降 E 大三和弦</strong><span id="chord-subtitle">B♭2 · E♭3 · G3</span></div></div></div><span class="hand-tag">L <span>左手</span></span></div>
+          <div class="chord-heading"><div><div class="eyebrow" id="group-label">手型 01 / 04</div><div class="chord-name"><h2 id="chord-symbol">E♭</h2><div><strong id="chord-title">降 E 大三和弦</strong><span id="chord-subtitle">B♭2 · E♭3 · G3</span></div></div></div><span class="hand-tag" id="hand-tag"><span id="hand-letter">L</span> <span id="hand-tag-label">左手</span></span></div>
           <div class="notes-row" id="notes-row" aria-label="当前音符和指法"></div>
           <div class="listen-row"><span class="microcopy" id="note-caption">三个音，一起按下</span><div><button id="play-separate" class="text-button"><svg viewBox="0 0 24 24"><path d="M5 16v-3m7 3V8m7 8V4"/></svg>逐音听</button><button id="play-together" class="text-button"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>一起听</button></div></div>
           <div class="play-feedback-row"><span class="microcopy" id="play-feedback" role="status"></span></div>
@@ -39,9 +39,9 @@
         <aside class="coach-panel" aria-label="逐步动作引导">
           <div class="coach-top"><span class="eyebrow">你的下一步</span><span id="phase-count">01 / 04</span></div>
           <h3 id="coach-title">先把手型放好</h3><p id="coach-copy">看清这三个落点，让手自然展开。</p>
-          <div class="hand-illustration" aria-label="左手指法示意，从小指 5 到拇指 1">
-            <svg viewBox="0 0 280 192" id="hand-svg"><defs><linearGradient id="hand-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3e454a" stop-opacity=".75"/><stop offset="1" stop-color="#262f31" stop-opacity=".1"/></linearGradient></defs><path class="hand-shape" d="M81 181 C78 160 51 143 43 116 L30 79 C25 63 42 56 49 72 L65 101 L53 47 C49 28 68 25 73 44 L86 90 L84 27 C83 8 104 7 106 26 L112 87 L119 34 C122 14 143 17 140 39 L137 106 L171 83 C190 70 200 88 186 101 L161 128 C155 151 150 165 151 182"/><path class="hand-crease" d="M77 123q33-13 58 4m-45 13q22-3 35 4m10-29q-13 22-8 47"/><g data-finger="5" transform="translate(38 52)"><circle r="14"/><text y="5">5</text></g><g data-finger="4" transform="translate(60 18)"><circle r="14"/><text y="5">4</text></g><g data-finger="3" transform="translate(96 6)"><circle r="14"/><text y="5">3</text></g><g data-finger="2" transform="translate(135 19)"><circle r="14"/><text y="5">2</text></g><g data-finger="1" transform="translate(193 75)"><circle r="14"/><text y="5">1</text></g><text class="hand-l" x="213" y="154">L</text></svg>
-            <span>左手手背视角 · 1 是拇指</span>
+          <div class="hand-illustration" id="hand-illustration" aria-label="左手指法示意，从小指 5 到拇指 1">
+            <svg viewBox="0 0 280 192" id="hand-svg"><defs><linearGradient id="hand-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3e454a" stop-opacity=".75"/><stop offset="1" stop-color="#262f31" stop-opacity=".1"/></linearGradient></defs><path class="hand-shape" id="hand-shape" d="M81 181 C78 160 51 143 43 116 L30 79 C25 63 42 56 49 72 L65 101 L53 47 C49 28 68 25 73 44 L86 90 L84 27 C83 8 104 7 106 26 L112 87 L119 34 C122 14 143 17 140 39 L137 106 L171 83 C190 70 200 88 186 101 L161 128 C155 151 150 165 151 182"/><path class="hand-crease" id="hand-crease" d="M77 123q33-13 58 4m-45 13q22-3 35 4m10-29q-13 22-8 47"/><g data-finger="5" transform="translate(38 52)"><circle r="14"/><text y="5">5</text></g><g data-finger="4" transform="translate(60 18)"><circle r="14"/><text y="5">4</text></g><g data-finger="3" transform="translate(96 6)"><circle r="14"/><text y="5">3</text></g><g data-finger="2" transform="translate(135 19)"><circle r="14"/><text y="5">2</text></g><g data-finger="1" transform="translate(193 75)"><circle r="14"/><text y="5">1</text></g><text class="hand-l" id="hand-letter-big" x="213" y="154">L</text></svg>
+            <span id="hand-illustration-caption">左手手背视角 · 1 是拇指</span>
           </div>
           <ol class="phase-list" id="phase-list"></ol>
           <div class="finger-adjust"><label for="fingering">建议指法</label><select id="fingering" aria-label="选择建议指法"></select></div>
@@ -53,9 +53,9 @@
         <div class="continuous-score-strip" id="continuous-score-strip" aria-label="当前音符的谱面对照" hidden></div>
         <div class="keyboard-map"><span id="position-label">全键盘 C1 – C7</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
         <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
-        <div class="keyboard-footer"><span><i class="legend-dot bass"></i>左手低音</span><span><i class="legend-dot chord"></i>左手和弦</span><span class="rh-legend"><i class="legend-dot melody"></i>右手旋律（本练习隐藏）</span><span class="number-legend">数字 = 手指</span></div>
+        <div class="keyboard-footer"><span id="legend-bass"><i class="legend-dot bass"></i>左手低音</span><span id="legend-chord"><i class="legend-dot chord"></i>左手和弦</span><span id="legend-melody" hidden><i class="legend-dot melody"></i>右手旋律</span><span class="number-legend">数字 = 手指</span></div>
       </div>
-      <div id="score-view" class="keyboard-section" hidden role="tabpanel" aria-labelledby="view-score"><div class="score-topline"><span>低音谱号 · 单组放大</span><span>音高对照，非节奏谱</span></div><div id="score"></div><p class="score-note">只呈现当前音组。点音符或上方音名，可对照试听。</p></div>
+      <div id="score-view" class="keyboard-section" hidden role="tabpanel" aria-labelledby="view-score"><div class="score-topline"><span id="score-clef-label">低音谱号 · 单组放大</span><span>音高对照，非节奏谱</span></div><div id="score"></div><p class="score-note">只呈现当前音组。点音符或上方音名，可对照试听。</p></div>
       <div class="pedal-strip"><div class="pedal-label"><svg viewBox="0 0 32 24"><path d="M8 19 13 5q1-3 4-2l6 2q3 1 1 4l-9 12Z"/><path d="M4 22h23"/></svg><div><strong>踏板引导 <span id="pedal-badge">先不加踏板</span></strong><small id="pedal-description">先练准落点，再用延音连接换位。</small></div></div><button id="pedal-toggle" class="switch" role="switch" aria-checked="false" aria-label="启用踏板引导"><span></span></button></div>
       <div class="pedal-detail" id="pedal-detail" hidden><div class="pedal-steps"><span><b>1</b>弹新低音</span><i>→</i><span><b>2</b>抬起旧踏板</span><i>→</i><span><b>3</b>随即踩下</span></div><p>换和声时，让旧声音清掉；同一和声内可保留延音。下面可试听“有 / 无踏板”的换位。</p><div class="pedal-actions"><button id="pedal-demo" class="text-button">▷ 试听踏板连接</button><button id="pedal-manual" class="small-button" aria-pressed="false">踏板已抬起 · 点按踩下</button></div><span class="pedal-state" id="pedal-state" role="status"></span></div>
       <div class="transport"><div class="playback-controls"><button id="demo" class="round-play" aria-label="播放本组完整示范"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg></button><div><strong id="demo-label">听一遍完整动作</strong><small id="audio-status" role="status">低音 → 移手 → 和弦</small></div><button id="loop" class="icon-button loop-button" aria-pressed="false" aria-label="循环本组示范"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V8a2 2 0 0 1 2-2h16M7 22l-4-4 4-4m14-1v3a2 2 0 0 1-2 2H3"/></svg></button></div><div class="advance-controls"><button id="previous" class="icon-button" aria-label="上一步">←</button><button id="next" class="primary-button">手型就位，练低音 <span>→</span></button></div></div>

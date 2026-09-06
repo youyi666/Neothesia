@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111819"><meta name="description" content="Neothesia 左手手型练习室 · 选关。挑一首曲子，挑一段小节，开始慢练。">
-  <title>选关 · 左手手型练习室 · Neothesia</title>
+  <meta name="theme-color" content="#111819"><meta name="description" content="Neothesia 手型练习室 · 选关。挑一首曲子、挑一只手、挑一段小节，开始慢练。">
+  <title>选关 · 手型练习室 · Neothesia</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
   <style>
     .select-shell{padding:20px 0 60px}
@@ -15,10 +15,17 @@
     .course-card:hover{border-color:#95ac89;background:#1e2b25}
     .course-card strong{display:block;font-family:Georgia,serif;font-size:16px;font-weight:400;color:#d3dccd;line-height:1.3}
     .course-card small{font-size:10px;color:#8fa58e}
+    .hand-badge{font-size:9px;color:#7d9387;letter-spacing:.3px}
     .back-link{display:inline-flex;align-items:center;gap:6px;color:#b8c4bc;font-size:11px;margin-bottom:14px}
     .back-link:hover{color:var(--text)}
-    .level-course-title{font-size:14px;color:var(--muted);margin:0 0 14px}
+    .level-course-title{font-size:14px;color:var(--muted);margin:0 0 10px}
     .level-course-title strong{color:var(--text);font-weight:500}
+    .hand-picker{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .hand-picker .segmented{display:flex;background:#121a1c;padding:3px;border-radius:7px;border:1px solid #283335}
+    .hand-picker .segmented button{border:0;background:none;color:#8d9d99;font-size:11px;padding:7px 14px;border-radius:5px;min-height:32px}
+    .hand-picker .segmented button.selected{background:#34423c;color:#d7e7cc}
+    .hand-picker .segmented button.selected.right{background:#2a3c2f;color:#cfe7cf}
+    .hand-picker small{color:var(--muted);font-size:10px}
     .empty-state{color:var(--muted);font-size:12px;padding:30px 0;text-align:center}
     [hidden]{display:none!important}
   </style>
@@ -31,9 +38,9 @@
   </header>
   <main class="select-shell">
     <section class="select-intro">
-      <div class="eyebrow"><span class="tiny-line"></span>左手手型练习室 <span>/</span> 选关</div>
-      <h1>挑一首曲子，挑一段小节</h1>
-      <p>只列出已经有左手数据、能用这套"和弦手型 + MIDI 判分"练习的曲目。</p>
+      <div class="eyebrow"><span class="tiny-line"></span>手型练习室 <span>/</span> 选关</div>
+      <h1>挑一首曲子，挑一只手，挑一段小节</h1>
+      <p>全部 35 首曲目都能用这套"手型 + MIDI 判分"练习——每首都有右手音轨，含左手数据的另外 13 首两只手都能练。</p>
     </section>
     <section id="course-view">
       <div id="course-list" class="course-list"></div>
@@ -42,6 +49,13 @@
     <section id="level-view" hidden>
       <a href="#" id="back-to-courses" class="back-link">← 返回曲目列表</a>
       <p class="level-course-title">正在练习：<strong id="level-course-name"></strong> · <span id="level-course-meta"></span></p>
+      <div class="hand-picker">
+        <div class="segmented" role="tablist" aria-label="选择练习的手">
+          <button id="hand-pick-left" role="tab" data-hand="left">左手</button>
+          <button id="hand-pick-right" role="tab" data-hand="right">右手</button>
+        </div>
+        <small id="hand-picker-hint"></small>
+      </div>
       <div id="level-list" class="course-list"></div>
     </section>
   </main>
@@ -49,6 +63,7 @@
 <script>
 const $=(id)=>document.getElementById(id);
 const CHUNK_SIZE=8;
+let currentCourse=null,currentHand='left';
 
 function chunksFor(measureCount){
   const chunks=[];
@@ -64,18 +79,38 @@ function showCourseView(){
   history.replaceState(null,'','select.html');
 }
 
-function showLevelView(course){
+function renderLevelList(){
+  const chunks=chunksFor(currentCourse.measure_count);
+  $('level-list').innerHTML=chunks.map((c,i)=>`
+    <a class="course-card" href="index.html?course=${encodeURIComponent(currentCourse.course_id)}&hand=${currentHand}&from=${c.from}&to=${c.to}">
+      <strong>关 ${String(i+1).padStart(2,'0')}</strong>
+      <small>第 ${c.from+1}-${c.to} 小节</small>
+    </a>`).join('');
+}
+
+function setHand(hand){
+  // 只有那只手真的有音轨（hand_tracks[hand] != null）才允许选中；两个按钮都在，
+  // 缺数据的那只手禁用并说明原因，而不是直接不显示按钮——不显示会让人以为
+  // "这首曲子只能选一只手"是理所当然的，禁用+提示能说清楚"为什么现在选不了"。
+  if(currentCourse.hand_tracks[hand]==null) return;
+  currentHand=hand;
+  $('hand-pick-left').classList.toggle('selected',hand==='left');
+  $('hand-pick-right').classList.toggle('selected',hand==='right');
+  $('hand-picker-hint').textContent=hand==='right'?'右手音轨对每首曲子都有':'这首曲子有左手数据';
+  renderLevelList();
+  history.replaceState(null,'',`select.html?course=${encodeURIComponent(currentCourse.course_id)}&hand=${hand}`);
+}
+
+function showLevelView(course,preferHand){
+  currentCourse=course;
   $('course-view').hidden=true;
   $('level-view').hidden=false;
   $('level-course-name').textContent=course.title;
   $('level-course-meta').textContent=`${course.bpm} BPM · 共 ${course.measure_count} 小节`;
-  const chunks=chunksFor(course.measure_count);
-  $('level-list').innerHTML=chunks.map((c,i)=>`
-    <a class="course-card" href="index.html?course=${encodeURIComponent(course.course_id)}&from=${c.from}&to=${c.to}">
-      <strong>关 ${String(i+1).padStart(2,'0')}</strong>
-      <small>第 ${c.from+1}-${c.to} 小节</small>
-    </a>`).join('');
-  history.replaceState(null,'',`select.html?course=${encodeURIComponent(course.course_id)}`);
+  $('hand-pick-left').disabled=course.hand_tracks.left==null;
+  $('hand-pick-right').disabled=course.hand_tracks.right==null;
+  const hand=preferHand&&course.hand_tracks[preferHand]!=null?preferHand:(course.hand_tracks.left!=null?'left':'right');
+  setHand(hand);
 }
 
 async function init(){
@@ -85,20 +120,23 @@ async function init(){
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     const list=Array.isArray(data)?data:data.courses||[];
-    courses=list.filter(c=>c.hand_tracks&&c.hand_tracks.left!=null);
+    // 右手音轨对全部曲目都有，这里的过滤只是防御性的——理论上不会有课程两只手
+    // 都没有音轨，但万一数据异常，也不要把这种课程列出来点了却打不开。
+    courses=list.filter(c=>c.hand_tracks&&(c.hand_tracks.left!=null||c.hand_tracks.right!=null));
   }catch(e){
     $('course-empty').hidden=false;
     return;
   }
   if(!courses.length){
     $('course-empty').hidden=false;
-    $('course-empty').textContent='暂时没有课程含左手数据，无法使用这套练习室。';
+    $('course-empty').textContent='暂时没有课程含左右手音轨数据，无法使用这套练习室。';
     return;
   }
   $('course-list').innerHTML=courses.map(c=>`
     <button class="course-card" data-course-id="${c.course_id}">
       <strong>${c.title}</strong>
       <small>${c.bpm} BPM · ${c.measure_count} 小节</small>
+      <span class="hand-badge">${c.hand_tracks.left!=null?'左手 · 右手':'仅右手'}</span>
     </button>`).join('');
   $('course-list').addEventListener('click',e=>{
     const btn=e.target.closest('[data-course-id]');
@@ -107,11 +145,14 @@ async function init(){
     if(course) showLevelView(course);
   });
   $('back-to-courses').onclick=(e)=>{e.preventDefault();showCourseView();};
+  $('hand-pick-left').onclick=()=>setHand('left');
+  $('hand-pick-right').onclick=()=>setHand('right');
 
-  const preselect=new URLSearchParams(location.search).get('course');
+  const params=new URLSearchParams(location.search);
+  const preselect=params.get('course');
   if(preselect){
     const course=courses.find(c=>c.course_id===preselect);
-    if(course) showLevelView(course);
+    if(course) showLevelView(course,params.get('hand'));
   }
 }
 init();
