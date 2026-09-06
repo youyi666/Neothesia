@@ -1,5 +1,4 @@
 const $ = (id) => document.getElementById(id);
-const STORAGE = 'neothesia-nocturne-practice-v1';
 
 // Issue #4 后续阶段「后端适配」：GROUPS 不再是写死的教学示例，而是从真实课程
 // 数据加载。默认指向已经存在的《肖邦：夜曲 Op.9 No.2》课程，可以用
@@ -15,6 +14,13 @@ const TO_MEASURE = Math.max(FROM_MEASURE + 1, Number(params.get('to')) || FROM_M
 // 变成全部 35 首，不用等每首曲子都补出"能配对出低音+和弦"的左手数据。
 const HAND = ['right','both'].includes(params.get('hand')) ? params.get('hand') : 'left';
 const HAND_LABEL = HAND === 'right' ? '右手' : HAND === 'both' ? '双手' : '左手';
+// 原来是一个全局固定的 key（'neothesia-nocturne-practice-v1'），不分课程/手/小节
+// 范围——这套页面本来只服务一首夜曲，够用；但现在能练全部 35 首曲目 × 三种手，
+// 不按 (课程,手,小节范围) 分开存的话，练完 A 曲子的手型再去练 B 曲子，
+// restoreSavedState() 会把 A 的 group/phase/done 状态套到 B 的 GROUPS 数组上——
+// 边界检查能防崩溃，但"done"进度会互相覆盖，练习记录不可靠。2026-09-05 扩到
+// 全部课程/手别时发现这个问题，顺手修掉，不是本次任务原本要做的事。
+const STORAGE = `neothesia-nocturne-practice-v2:${COURSE_ID}:${HAND}:${FROM_MEASURE}-${TO_MEASURE}`;
 
 const PITCHES=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
 const CN=['哆','降瑞','瑞','降咪','咪','发','降嗦','嗦','降啦','啦','降西','西'];
