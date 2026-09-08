@@ -193,15 +193,25 @@ async function readyAudio(){if(!audioContext){const AC=window.AudioContext||wind
 function release(voice,when=audioContext.currentTime){if(voice.released)return;voice.released=true;voice.gain.gain.cancelScheduledValues(when);voice.gain.gain.setTargetAtTime(.00001,when,.07);try{voice.osc.stop(when+.5);}catch{}}
 function pedalSet(down){manualPedal=down;$('pedal-manual').setAttribute('aria-pressed',String(down));$('pedal-manual').textContent=down?'踏板已踩下 · 点按抬起':'踏板已抬起 · 点按踩下';if(!down&&audioContext){for(const voice of activeVoices)if(voice.keyReleased)release(voice);}}
 function playNote(midi,{duration=.65,at=0,velocity=1}={}){const t=audioContext.currentTime+at+.015;const osc=audioContext.createOscillator();const gain=audioContext.createGain();const real=new Float32Array([0,0,0,0,0,0]);const imag=new Float32Array([0,1,.32,.16,.065,.025]);osc.setPeriodicWave(audioContext.createPeriodicWave(real,imag));osc.frequency.value=440*Math.pow(2,(midi-69)/12);const vol=.20*velocity;gain.gain.setValueAtTime(.00001,t);gain.gain.exponentialRampToValueAtTime(vol,t+.012);gain.gain.exponentialRampToValueAtTime(vol*.29,t+.42);gain.gain.exponentialRampToValueAtTime(.0001,t+8);osc.connect(gain);gain.connect(master);const voice={osc,gain,released:false,keyReleased:false};activeVoices.add(voice);osc.onended=()=>{activeVoices.delete(voice);osc.disconnect();gain.disconnect();};osc.start(t);osc.stop(t+9);later(()=>{voice.keyReleased=true;if(!manualPedal)release(voice);},(at+duration)*1000);later(()=>{document.querySelectorAll(`[data-midi="${midi}"]`).forEach(el=>el.classList.add('sounding'));},at*1000);later(()=>{document.querySelectorAll(`[data-midi="${midi}"]`).forEach(el=>el.classList.remove('sounding'));},(at+Math.min(duration,.7))*1000);}
-function stopAudio(){runId++;playing=false;for(const t of timers)clearTimeout(t);timers.clear();if(audioContext)for(const voice of activeVoices)release(voice);pedalSet(false);document.querySelectorAll('.sounding').forEach(el=>el.classList.remove('sounding'));$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';$('demo').setAttribute('aria-label','播放本组完整示范');$('demo-label').textContent='听一遍完整动作';$('audio-status').textContent='低音 → 移手 → 和弦';$('pedal-state').textContent='';$('pedal-demo').textContent='▷ 试听踏板连接';}
+function demoVisualStep(notes, pressedFinger, label){
+  document.body.classList.add('demo-playing');
+  document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{
+    const finger=Number(el.dataset.finger);
+    el.classList.toggle('active', notes.some(note=>Number(note.finger)===finger));
+    el.classList.toggle('demo-pressed', Number(pressedFinger)===finger);
+  });
+  document.querySelectorAll('#keyboard .piano-key').forEach(el=>el.classList.toggle('demo-key', notes.some(note=>Number(el.dataset.midi)===Number(note.midi))));
+  if(label) $('audio-status').textContent=label;
+}
+function stopAudio(){runId++;playing=false;for(const t of timers)clearTimeout(t);timers.clear();if(audioContext)for(const voice of activeVoices)release(voice);pedalSet(false);document.body.classList.remove('demo-playing');document.querySelectorAll('.sounding,.demo-key,.demo-pressed').forEach(el=>el.classList.remove('sounding','demo-key','demo-pressed'));$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';$('demo').setAttribute('aria-label','播放本组完整示范');$('demo-label').textContent='听一遍完整动作';$('audio-status').textContent='低音 → 移手 → 和弦';$('pedal-state').textContent='';$('pedal-demo').textContent='▷ 试听踏板连接';}
 async function listen(notes,separate=false){stopAudio();const token=runId;try{await readyAudio();if(token!==runId)return;notes.forEach((n,i)=>playNote(n,{at:separate?i*.48:0,duration:1.1}));$('audio-status').textContent=(separate?'依次试听：':'同时试听：')+notes.map(name).join(' · ');}catch{announce('声音暂时无法启动，请再次点击试听。');}}
 async function listenOne(note){const wasPedal=manualPedal;if(playing)stopAudio();try{await readyAudio();if(wasPedal)pedalSet(true);playNote(note,{duration:.65});$('audio-status').textContent='正在试听 '+name(note)+(manualPedal?' · 延音踏板已踩下':'');}catch{announce('声音暂时无法启动，请再次点击琴键。');}}
 async function demo(pedalOnly=false){if(playing){stopAudio();return;}stopAudio();const token=runId;try{await readyAudio();if(token!==runId)return;}catch{announce('请再次点击，开启浏览器声音。');return;}playing=true;$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="M8 6h3v12H8zM15 6h3v12h-3z"/></svg>';$('demo').setAttribute('aria-label','停止示范');$('demo-label').textContent='正在示范 · 点击停止';if(pedalOnly)$('pedal-demo').textContent='□ 停止踏板示范';
   const beat=60/state.tempo;const withPedal=pedalOnly||(state.pedal&&HAS_PEDAL_DATA);const thisGroup=group();
-  const cycle=()=>{if(token!==runId)return;pedalSet(false);$('audio-status').textContent='1 · 小指弹低音 '+name(thisGroup.bass);if(withPedal)$('pedal-state').textContent='先弹低音，再踩下踏板。';playNote(thisGroup.bass,{duration:beat*.4,velocity:.8});
+  const cycle=()=>{if(token!==runId)return;pedalSet(false);const bassStep={midi:thisGroup.bass,finger:thisGroup.bassFinger};demoVisualStep([bassStep],thisGroup.bassFinger,'1 · 手指 '+thisGroup.bassFinger+' 按下低音 '+name(thisGroup.bass));if(withPedal)$('pedal-state').textContent='先弹低音，再踩下踏板。';playNote(thisGroup.bass,{duration:beat*.4,velocity:.8});
     if(withPedal)later(()=>{pedalSet(true);$('pedal-state').textContent='踏板踩下 · 松开低音，声音继续。';},beat*180);
-    later(()=>{$('audio-status').textContent='2 · 松开旧键，整手移到和弦';thisGroup.notes.forEach(n=>playNote(n,{duration:beat*.58,velocity:.72}));},beat*1000);
-    later(()=>{$('audio-status').textContent='3 · 保持手型，再弹一次';thisGroup.notes.forEach(n=>playNote(n,{duration:beat*.58,velocity:.65}));},beat*2000);
+    later(()=>{const steps=thisGroup.notes.map((n,i)=>({midi:n,finger:fingers()[i]||1}));demoVisualStep(steps,null,'2 · 松开旧键，手指移动到和弦');thisGroup.notes.forEach(n=>playNote(n,{duration:beat*.58,velocity:.72}));},beat*1000);
+    later(()=>{const steps=thisGroup.notes.map((n,i)=>({midi:n,finger:fingers()[i]||1}));demoVisualStep(steps,fingers()[0]||1,'3 · 手指 '+(fingers()[0]||1)+' 带动整组按下');thisGroup.notes.forEach(n=>playNote(n,{duration:beat*.58,velocity:.65}));},beat*2000);
     if(withPedal){later(()=>{const nextGroup=GROUPS[(state.group+1)%GROUPS.length];$('audio-status').textContent='4 · 新低音落键，换踏板';playNote(nextGroup.bass,{duration:beat*.55,velocity:.7});$('pedal-state').textContent='新低音落键后，抬起踏板清掉旧和声。';later(()=>pedalSet(false),55);later(()=>{pedalSet(true);$('pedal-state').textContent='随即重新踩下，接住新低音。';},155);},beat*3000);}
     later(()=>{if(token!==runId)return;if(state.loop&&!pedalOnly)cycle();else stopAudio();},beat*(withPedal?4500:3300));};cycle();}
 function buildKeyboard(){
@@ -822,3 +832,135 @@ function applyHandChrome(){
 }
 applyHandChrome();
 init();
+
+// The overlay is a sibling of the keyboard: existing key rendering must not
+// replace the hand nodes. Audio and motion share the AudioContext clock.
+let handDemoFrame = 0;
+let handDemoToken = null;
+const demoScroll = $('keyboard-scroll');
+demoScroll.style.position = 'relative';
+const handLayer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+handLayer.setAttribute('aria-label', '琴键上的五指手掌演奏模型');
+handLayer.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:8;overflow:visible;filter:drop-shadow(0 6px 5px #0006)';
+demoScroll.append(handLayer);
+
+function stopHandDemo() {
+  cancelAnimationFrame(handDemoFrame);
+  handDemoFrame = 0;
+  handDemoToken = null;
+  handLayer.replaceChildren();
+  document.querySelectorAll('.hand-demo-down').forEach(key => {
+    key.classList.remove('hand-demo-down');
+    key.style.outline = '';
+  });
+  $('watch-fingers').textContent = '观看手指示范';
+}
+
+function paintDemoHands(notes, down, blend = 1, previous = [], press = down ? 1 : 0) {
+  const keyboard = $('keyboard');
+  const width = keyboard.offsetWidth;
+  handLayer.setAttribute('width', width);
+  handLayer.setAttribute('height', keyboard.offsetHeight);
+  handLayer.setAttribute('viewBox', `0 0 ${width} ${keyboard.offsetHeight}`);
+  const keyX = pitch => {
+    const key = keyboard.querySelector(`[data-midi="${pitch}"]`);
+    return key ? key.offsetLeft + key.offsetWidth / 2 : width / 2;
+  };
+  const ease = t => t*t*(3-2*t);
+  blend = ease(Math.max(0,Math.min(1,blend)));
+  let svg = `<defs><linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop stop-color="#b98c72"/><stop offset=".42" stop-color="#efcfb5"/><stop offset="1" stop-color="#c49a7e"/></linearGradient></defs>`;
+  for (const hand of ['left', 'right']) {
+    const active = notes.filter(n => n.hand === hand);
+    if (!active.length) continue;
+    const old = previous.filter(n => n.hand === hand);
+    const direction = hand === 'left' ? -1 : 1;
+    const offsets = [0,-43,-20,0,20,37];
+    const centerOf = list => list.reduce((sum,n) => sum + keyX(n.note)-offsets[n.finger||3]*direction,0) / list.length;
+    const oldCenter = centerOf(old.length ? old : active);
+    const newCenter = centerOf(active);
+    const center = newCenter * blend + oldCenter * (1-blend);
+    const lift = Math.sin(Math.PI*blend)*12;
+    const palmY = keyboard.offsetHeight - 27 - lift;
+    svg += `<path d="M${center-35} ${palmY-36} Q${center-43} ${palmY-9} ${center-25} ${palmY+15} L${center-23} ${palmY+26} L${center+25} ${palmY+26} Q${center+25} ${palmY+9} ${center+34} ${palmY-6} L${center+37} ${palmY-39} Q${center} ${palmY-51} ${center-35} ${palmY-36} Z" fill="url(#skin)" stroke="#9f7966" stroke-width="1.2"/>`;
+    for(let finger=1;finger<=5;finger++) {
+      const baseX = center + offsets[finger]*direction*.77;
+      const note = active.find(n=>n.finger===finger);
+      const oldNote = old.find(n=>n.finger===finger);
+      const targetX = note ? keyX(note.note) : newCenter + offsets[finger]*direction;
+      const fromX = oldNote ? keyX(oldNote.note) : oldCenter + offsets[finger]*direction;
+      const tipX = fromX*(1-blend)+targetX*blend;
+      const restY = [0,117,89,80,88,105][finger];
+      const fromY = oldNote ? (isBlack(oldNote.note)?65:100) : restY;
+      const toY = note ? (isBlack(note.note)?65:100) : restY;
+      const tipY = fromY*(1-blend)+toY*blend - lift + (note?press*7:0);
+      const baseY = palmY - (finger===1?6:31);
+      const knuckleX = baseX*.6+tipX*.4;
+      const knuckleY = (baseY+tipY)*.5-6;
+      const path = `M${baseX} ${baseY} Q${knuckleX} ${knuckleY} ${tipX} ${tipY}`;
+      const thickness = finger===1?19:finger===5?13:16;
+      svg += `<path d="${path}" fill="none" stroke="#a37a62" stroke-width="${thickness+2}" stroke-linecap="round"/><path d="${path}" fill="none" stroke="url(#skin)" stroke-width="${thickness}" stroke-linecap="round"/><path d="M${knuckleX-4} ${knuckleY+2} q4 -2 8 0" fill="none" stroke="#af866d" stroke-opacity=".5"/><rect x="${tipX-4}" y="${tipY-3}" width="8" height="10" rx="4" fill="#f2dcd0" stroke="#c4a390" stroke-width=".6"/>`;
+      if(note) svg += `<circle cx="${tipX}" cy="${tipY-16}" r="8" fill="${down?'#edc46c':'#243c37'}"/><text x="${tipX}" y="${tipY-13}" text-anchor="middle" fill="${down?'#332b1b':'#eff5e8'}" font-size="9">${finger}</text>`;
+    }
+    svg += `<text x="${center}" y="${palmY+3}" text-anchor="middle" fill="#654731" font-size="12">${hand==='left'?'左手':'右手'}</text>`;
+  }
+  handLayer.innerHTML = svg;
+  keyboard.querySelectorAll('.piano-key').forEach(key => {
+    const held = down && notes.some(n=>n.note===Number(key.dataset.midi));
+    key.classList.toggle('hand-demo-down',held);
+    key.style.outline = held ? '3px solid #edaf52' : '';
+  });
+}
+
+$('watch-fingers').onclick = async () => {
+  if(handDemoToken !== null) { stopAudio(); stopHandDemo(); return; }
+  if(!RAW_EVENTS.length) { announce('课程仍在加载，请稍后再试。'); return; }
+  stopAudio();
+  const token = runId;
+  handDemoToken = token;
+  try { await readyAudio(); } catch { stopHandDemo(); announce('请再次点击以开启声音。'); return; }
+  if(token !== runId || handDemoToken !== token) return;
+  setView('keyboard');
+  const startIndex = state.mode === 'continuous' ? continuousSession?.getEventIndex() || 0 : 0;
+  const events = RAW_EVENTS.slice(startIndex,startIndex+8);
+  if(!events.length) { stopHandDemo(); return; }
+  const rawBeat = 60/state.tempo;
+  const gaps = events.slice(1).map((event,i)=>(event.tick-events[i].tick)/TICKS_PER_QUARTER*rawBeat).filter(gap=>gap>0);
+  const slow = $('hand-motion-speed').value === 'slow';
+  // Uniform stretching preserves rhythm while leaving visible travel time.
+  const stretch = slow ? Math.max(2,1.4/Math.min(...gaps,1.4)) : 1;
+  const beat = rawBeat*stretch;
+  const start = audioContext.currentTime + .6;
+  const sequence = events.map((event,i)=>({
+    notes:event.notes,
+    at:(event.tick-events[0].tick)/TICKS_PER_QUARTER*beat,
+    duration:Math.max(.08,Math.min(beat*.55,events[i+1] ? (events[i+1].tick-event.tick)/TICKS_PER_QUARTER*beat*.55 : beat*.55)),
+  }));
+  for(const event of sequence) for(const note of event.notes) playNote(note.note,{at:start-audioContext.currentTime+event.at,duration:event.duration});
+  $('watch-fingers').textContent = '停止手指示范';
+  $('keyboard-view').scrollIntoView({block:'center'});
+  const frame = () => {
+    if(token!==runId || document.hidden) { stopHandDemo(); return; }
+    const elapsed = audioContext.currentTime-start;
+    const last = sequence[sequence.length-1];
+    if(elapsed>last.at+last.duration+.3) {
+      stopHandDemo();
+      paintDemoHands(last.notes,false);
+      $('finger-demo-status').textContent='示范结束 · 点击可重播这 8 个音组';
+      return;
+    }
+    let index = sequence.findLastIndex(event=>event.at<=elapsed);
+    index = Math.max(0,index);
+    const event = sequence[index];
+    const next = sequence[index+1];
+    const down = elapsed>=event.at && elapsed<event.at+event.duration;
+    const moving = !down && next && elapsed>=event.at+event.duration;
+    const blend = moving ? Math.min(1,(elapsed-event.at-event.duration)/(next.at-event.at-event.duration)) : 1;
+    const since = elapsed-event.at;
+    const press = down ? Math.min(1,Math.max(0,since/.12),Math.max(0,(event.duration-since)/.16)) : 0;
+    paintDemoHands(moving?next.notes:event.notes,down,blend,event.notes,press);
+    $('finger-demo-status').textContent=`示范 ${index+1}/${sequence.length} · ${event.notes.map(n=>name(n.note)).join(' + ')} · ${down?'按下':moving?'抬指移手':'准备落键'}`;
+    handDemoFrame=requestAnimationFrame(frame);
+  };
+  frame();
+};
+window.addEventListener('pagehide',stopHandDemo);

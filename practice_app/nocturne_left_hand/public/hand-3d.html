@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三维右手 · 五音慢练</title>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e8e4dc;color:#283630;font:15px 'Microsoft YaHei',sans-serif}header,footer{padding:24px 5vw}header{display:flex;justify-content:space-between;align-items:center;gap:20px}h1{font:36px Georgia,serif;margin:6px 0}small{letter-spacing:2px;color:#61736a}a{color:inherit}#stage{height:65vh;min-height:340px;position:relative;background:radial-gradient(ellipse,#faf7ef,#dfdbd2)}canvas{width:100%;height:100%;display:block}.controls{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:20px 5vw;background:#f6f2ea}button,select{font:inherit;border:1px solid #7f9385;border-radius:8px;padding:12px 20px;background:#f9f7f1;color:#293d30;cursor:pointer}button.primary{background:#294c3c;color:white}button:disabled{opacity:.45}#status{min-width:250px}footer{color:#657168;font-size:12px;line-height:1.8}.notes{display:flex;gap:8px}.notes span{border-bottom:3px solid transparent;padding:8px}.notes .active{border-color:#ab672b;background:#e7d5b8}.hint{position:absolute;top:18px;left:5vw;color:#61736a;pointer-events:none}@media(max-width:650px){h1{font-size:25px}header{align-items:start}.controls{gap:10px}#stage{height:55vh}}
+</style>
+</head>
+<body>
+<header><div><small>HAND STUDY / 01</small><h1>看清每一次落指</h1><div>右手 · C D E F G · 固定骨长的三维手模型</div></div><a href="index.html">返回练习室</a></header>
+<main><div id="stage"><div class="hint">手背视角 · 可切换侧面观察指节</div></div>
+<div class="controls"><button id="play" class="primary" disabled>模型加载中</button><button id="reset" disabled>回到准备手型</button><label>速度 <select id="speed"><option value="2.8">慢速 · 每音 2.8 秒</option><option value="1.8">每音 1.8 秒</option></select></label><button id="view">侧面观察</button><span id="status" role="status">正在加载本地三维模型…</span><div class="notes" id="notes"><span>C · 1</span><span>D · 2</span><span>E · 3</span><span>F · 4</span><span>G · 5</span></div></div></main>
+<footer>交互原型：使用 WebXR Input Profiles 手部网格与 Three.js。本例只验证五音、单手和慢速动作；关节使用有限角度弯曲，没有拉长手指。尚未接入任意 MIDI，也不是专业指法教学的最终验收版本。</footer>
+<script type="module" src="hand-3d.js"></script>
+</body></html>

@@ -1,5 +1,47 @@
 # 交接文档
 
+## 2026-09-08 更新：GitHub Issue #7 手指示范交接
+
+### 目标与最终范围
+
+Issue #7 的正式实现归属是新版 `nocturne_left_hand` 练习室，不是主应用旧「评分练习」页。用户需要的是画面上连续按下几个音符作为示范，因此本次交付包含一个二维备用示范和一个更接近真人效果的三维手模型原型；旧评分页没有保留本次试验代码。
+
+### 入口
+
+- 新版练习室：`http://localhost:3721/nocturne-left-hand/index.html`
+- 二维备用示范：键盘区点击「观看手指示范」。它使用真实课程事件和指法，支持慢动作、按下/抬起、连续换位。
+- 三维真人手模型：点击「体验三维真人手型 · 五音示范」，或直接打开 `http://localhost:3721/nocturne-left-hand/hand-3d.html`。
+
+### 代码与资源
+
+- `nocturne_left_hand/public/app.js`：二维示范的时钟、音组、键位和手指动画；不进入评分会话，不保存练习进度。
+- `nocturne_left_hand/public/index.html`：新版练习室入口与演示按钮。
+- `nocturne_left_hand/public/hand-3d.html`：三维原型页面，提供播放、重置、慢速和视角切换。
+- `nocturne_left_hand/public/hand-3d.js`：Three.js 场景、钢琴键、真实手部 GLB 加载和骨骼动画。手指使用有限角度弯曲，整手沿键面平移，避免拉伸手指。
+- `nocturne_left_hand/public/vendor/right.glb`：来自 WebXR Input Profiles 的通用右手网格。
+- `nocturne_left_hand/public/vendor/HAND-LICENSE.txt`：手部资源许可证；`THREE-LICENSE.txt`：Three.js 许可证。
+
+### 设计与限制
+
+- 二维示范跟随新版练习室真实 `RAW_EVENTS`；三维页面当前固定演示 C-D-E-F-G 五音，用于先验证“真人模型 + 连续落指 + 动画节奏”。
+- 三维原型当前是右手、单音、五音和慢速示范，尚未接入任意 MIDI、课程音符或左右手切换。
+- 三维骨骼动画不是生物力学仿真，后续应根据课程的 `finger`、`startTick`、`duration` 生成完整动作轨迹，并补齐左手模型与和弦。
+- 本次没有修改评分算法、课程数据结构或后端接口。
+
+### 验证记录
+
+- `node --check nocturne_left_hand/public/app.js` 通过。
+- `node --check nocturne_left_hand/public/hand-3d.js` 通过。
+- `git diff --check` 通过。
+- 已用本地服务和浏览器打开三维入口，确认手部 GLB、钢琴键盘、播放按钮、慢速控制和视角切换均可加载；播放过程中可看到手掌移动与手指按键动作。
+- 完整测试套件仍有仓库既有环境依赖：部分课程测试需要 `practice_app/data` 的运行时数据目录，不能据此判断本次前端改动失败。
+
+### 后续建议
+
+1. 把三维示范的固定五音替换为新版练习室的真实音符序列和自动指法。
+2. 引入音符的按下、保持、释放三个阶段，让动作时长与 MIDI 音符时长一致。
+3. 增加左手/双手模型、和弦落键和移动端布局测试，再考虑将三维示范设为默认入口。
+
 ## 2026-09-04 更新：GitHub Issue #4 第二阶段（踏板辅助）
 
 - 接着第一阶段（和弦手型可视化）往下做。目标是 Issue #4「核心问题 4：增加踏板辅助」，范围收得很

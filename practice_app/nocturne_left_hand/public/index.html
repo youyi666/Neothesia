@@ -4,9 +4,24 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111819"><meta name="description" content="Neothesia 夜曲左手练习室。拆开和弦，找到琴键，慢慢练会换位。">
   <title>夜曲左手练习室 · Neothesia</title>
+  <script>
+    // The room needs the local server for ES modules and course APIs.
+    if (location.protocol === 'file:') {
+      location.replace('http://localhost:3721/nocturne-left-hand/index.html' + location.search + location.hash);
+    }
+  </script>
   <link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
 </head>
-<body>
+  <style>
+    .demo-pressed circle { fill:#f0d898 !important; stroke:#fff1c8 !important; transform:scale(1.12); transform-origin:center; }
+    .demo-pressed text { fill:#332b1b !important; font-weight:700; }
+    .demo-playing #hand-shape { filter:drop-shadow(0 4px 5px rgba(217,187,128,.18)); }
+    .demo-playing .piano-key.demo-key { box-shadow:inset 0 -7px #d9bb80, 0 0 0 2px #f0d898; }
+    .demo-playing .piano-key.demo-key .key-finger { background:#f0d898; color:#332b1b; }
+    .demo-playing #hand-svg { animation:demo-hand-breathe .55s ease-in-out infinite alternate; }
+    @keyframes demo-hand-breathe { from { opacity:.88; } to { opacity:1; } }
+  </style>
+  <body>
 <div class="app-shell">
   <header class="topbar">
     <div class="topbar-left"><a href="select.html" class="icon-button" aria-label="返回选关">←</a><a href="/" class="brand" aria-label="Neothesia 练习室首页"><span class="brand-icon"><i></i><i></i><i></i><i></i></span><span>neothesia<span class="brand-sub">PRACTICE STUDIO</span></span></a></div>
@@ -53,6 +68,12 @@
       <div id="keyboard-view" class="keyboard-section" role="tabpanel" aria-labelledby="view-keyboard">
         <div class="continuous-score-strip" id="continuous-score-strip" aria-label="当前音符的谱面对照" hidden></div>
         <div class="keyboard-map"><span id="position-label">全键盘 C1 – C7</span><span class="keyboard-direction">低音 <span>⟶</span> 高音</span></div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:12px 0">
+          <button id="watch-fingers" class="primary-button" type="button">观看手指示范</button>
+          <a href="hand-3d.html" class="primary-button">体验三维真人手型 · 五音示范</a>
+          <label>动作速度 <select id="hand-motion-speed"><option value="slow">慢动作（看清移手）</option><option value="normal">跟随示范 BPM</option></select></label>
+          <span id="finger-demo-status" role="status">在下方琴键上演示连续 8 个音组 · 无需连接 MIDI</span>
+        </div>
         <div class="keyboard-scroll" id="keyboard-scroll"><div class="keyboard" id="keyboard" aria-label="可试听的钢琴键盘"></div></div>
         <div class="keyboard-footer"><span id="legend-bass"><i class="legend-dot bass"></i>左手低音</span><span id="legend-chord"><i class="legend-dot chord"></i>左手和弦</span><span id="legend-melody" hidden><i class="legend-dot melody"></i>右手旋律</span><span id="legend-duet" hidden><i class="legend-dot duet"></i>双手同时</span><span class="number-legend">数字 = 手指</span></div>
       </div>
