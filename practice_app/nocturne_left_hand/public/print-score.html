@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打印乐谱 · Neothesia</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  /* 打印目标：A4 横屏一页，页边距 10mm——所有尺寸下面直接用 mm，
+     屏幕预览和打印输出用的是同一套坐标，不用另外换算。内容超出一页
+     （范围给得特别长时）浏览器打印会自然分页，不用额外处理。 */
+  @page { size: A4 landscape; margin: 10mm; }
+  :root{--ink:#1c1c1c;--muted:#6b6b62;}
+  *{box-sizing:border-box}
+  body{margin:0;background:#dedad2;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--ink)}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 18px;background:#20272a;color:#eef1e9;flex-wrap:wrap}
+  .toolbar strong{font-size:13px;font-weight:600}
+  .toolbar small{color:#a9b6ad;font-size:11px;display:block;margin-top:2px}
+  .toolbar-actions{display:flex;align-items:center;gap:14px}
+  .toolbar-hint{font-size:11px;color:#9fb09b}
+  .toolbar button{background:#bfd9aa;color:#1c2b18;border:0;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer}
+  .toolbar button:hover{filter:brightness(1.08)}
+  .page-wrap{display:flex;justify-content:center;padding:20px 12px 48px}
+  .sheet{width:297mm;min-height:210mm;background:#fff;box-shadow:0 6px 30px #0004;padding:10mm}
+  .sheet header{display:flex;justify-content:space-between;align-items:flex-end;gap:10mm;border-bottom:0.5mm solid #222;padding-bottom:3mm;margin-bottom:6mm}
+  .sheet h1{margin:0;font-size:6.5mm;font-weight:600;letter-spacing:.1mm}
+  .sheet .meta{font-size:3.2mm;color:var(--muted);margin-top:1mm}
+  .sheet .disclaimer{font-size:2.7mm;color:#8f8f84;text-align:right;max-width:70mm;line-height:1.5}
+  .systems{display:flex;flex-direction:column;gap:10mm}
+  .systems svg{display:block;width:100%;height:auto}
+  .status{padding:60px 20px;text-align:center;color:#777;font-size:13px}
+  @media print{
+    body{background:#fff}
+    .toolbar{display:none!important}
+    .page-wrap{padding:0;display:block}
+    .sheet{box-shadow:none;width:auto;min-height:0;padding:0;margin:0}
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <div><strong id="tb-title">加载中…</strong><small id="tb-meta"></small></div>
+    <div class="toolbar-actions">
+      <span class="toolbar-hint">Ctrl+P / ⌘+P 打印，另存为 PDF 也走这个入口</span>
+      <button id="print-btn" type="button">🖨 打印 / 导出 PDF</button>
+    </div>
+  </div>
+  <div class="page-wrap">
+    <div class="sheet" id="sheet">
+      <header>
+        <div>
+          <h1 id="sheet-title">加载中…</h1>
+          <div class="meta" id="sheet-meta"></div>
+        </div>
+        <div class="disclaimer">音名 + 建议指法参考谱，不含节奏时值 —— 供音符已经练熟、只需要巩固手感和肌肉记忆时对照使用。</div>
+      </header>
+      <div class="systems" id="systems"><p class="status">加载中…</p></div>
+    </div>
+  </div>
+<script src="print-score.js"></script>
+</body>
+</html>

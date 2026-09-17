@@ -14,6 +14,10 @@ const TO_MEASURE = Math.max(FROM_MEASURE + 1, Number(params.get('to')) || FROM_M
 // 变成全部 35 首，不用等每首曲子都补出"能配对出低音+和弦"的左手数据。
 const HAND = ['right','both'].includes(params.get('hand')) ? params.get('hand') : 'left';
 const HAND_LABEL = HAND === 'right' ? '右手' : HAND === 'both' ? '双手' : '左手';
+// 打印乐谱按钮直接带上当前正在练的课程/手/小节范围跳转，不用用户自己重新选一遍——
+// 点开永远是"刚好在练的这一段"。print-score.html 是独立静态页面，自己重新校验
+// 小节范围是否超出课程长度，这里不用先等 init() 加载完课程数据才能拼链接。
+$('print-score-link').href = `print-score.html?course=${encodeURIComponent(COURSE_ID)}&hand=${encodeURIComponent(HAND)}&from=${FROM_MEASURE}&to=${TO_MEASURE}`;
 // 复用主应用 state.currentUser 那一套用户概念（默认'罗俊生'，跟主应用一致），
 // 让服务器端进度存档能按人分开——主应用课程详情页的入口链接会带上
 // &user=当前用户，这里只是兜底默认值，不是这个页面自己发明的新身份系统。
@@ -136,6 +140,13 @@ let HAS_PEDAL_DATA=false;
 let RAW_EVENTS=[];
 let TICKS_PER_QUARTER=384;
 let audioContext, master, playing=false,runId=0,manualPedal=false,activeVoices=new Set(),timers=new Set(),toastTimer;
+// 试听完整片段播放期间会把音卡/键盘目标键/谱面光标临时改成"现在弹的是这个"，
+// 跟当前手型组/连续演奏进度无关——播放结束或被打断（Escape、切换模式、再点一次
+// 按钮）都要把画面复原成原来该显示的内容，不能停在播放期间最后一帧不动。
+// stopAudio() 是所有打断路径的共同出口，复原逻辑放这里才能保证不遗漏；用这个
+// 标记只在真的在播完整片段时才触发复原渲染，避免每次 listenOne() 试听单音也
+// 跟着重新 render() 一次（那样每点一个键都会重建整页 DOM，很浪费也会闪烁）。
+let fullSegmentActive=false;
 const group=()=>GROUPS[state.group];
 const fingers=()=>group().fingerings[state.fingering]||group().fingerings[0];
 const pitch=(n)=>PITCHES[((n%12)+12)%12];
@@ -203,7 +214,50 @@ function demoVisualStep(notes, pressedFinger, label){
   document.querySelectorAll('#keyboard .piano-key').forEach(el=>el.classList.toggle('demo-key', notes.some(note=>Number(el.dataset.midi)===Number(note.midi))));
   if(label) $('audio-status').textContent=label;
 }
-function stopAudio(){runId++;playing=false;for(const t of timers)clearTimeout(t);timers.clear();if(audioContext)for(const voice of activeVoices)release(voice);pedalSet(false);document.body.classList.remove('demo-playing');document.querySelectorAll('.sounding,.demo-key,.demo-pressed').forEach(el=>el.classList.remove('sounding','demo-key','demo-pressed'));$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';$('demo').setAttribute('aria-label','播放本组完整示范');$('demo-label').textContent='听一遍完整动作';$('audio-status').textContent='低音 → 移手 → 和弦';$('pedal-state').textContent='';$('pedal-demo').textContent='▷ 试听踏板连接';}
+function stopAudio(){runId++;playing=false;for(const t of timers)clearTimeout(t);timers.clear();if(audioContext)for(const voice of activeVoices)release(voice);pedalSet(false);document.body.classList.remove('demo-playing');document.querySelectorAll('.sounding,.demo-key,.demo-pressed').forEach(el=>el.classList.remove('sounding','demo-key','demo-pressed'));$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';$('demo').setAttribute('aria-label','播放本组完整示范');$('demo-label').textContent='听一遍完整动作';$('audio-status').textContent='低音 → 移手 → 和弦';$('pedal-state').textContent='';$('pedal-demo').textContent='▷ 试听踏板连接';const fullBtn=$('play-full-segment');if(fullBtn){fullBtn.textContent='▶ 试听完整片段';fullBtn.setAttribute('aria-label','按真实节奏试听这一段完整演奏，帮助听出连贯的音乐感觉');}if(fullSegmentActive){fullSegmentActive=false;if(GROUPS.length)state.mode==='continuous'?renderContinuous():render();}}
+// 完整片段试听（不拆手型、不按阶段等待，按 MIDI 里的真实先后顺序和相对时值一次性
+// 播放 FROM_MEASURE-TO_MEASURE 整段）——之前只能逐个音符/逐个手型组试听
+// （listenOne/listen/demo 都只处理"当前一组"），弹熟每个手型之后仍然不知道
+// 连起来该是什么样的乐句感觉，这是用户反馈"弹不出连续的音乐感觉"的直接原因：
+// 工具里从来没有一个能听到真实节奏的参照。RAW_EVENTS 是配对成手型之前的原始
+// onset 序列（跟连续演奏模式用的是同一份数据），按事件间的真实 tick 间隔换算
+// 成秒数播放，而不是用分步骤模式那种教学用的固定节拍——这样才聽得出真实的
+// 疏密和乐句呼吸，不是均匀的节拍器声音。速度复用"示范速度"滑块（跟 demo()
+// 同一个 state.tempo，语义一致：数值是四分音符每分钟），方便先放慢听清楚，
+// 再逐步调回接近原速。
+async function playFullSegment(){
+  if(playing){stopAudio();return;}
+  if(!RAW_EVENTS.length){announce('还没有加载到这一段的音符数据，请稍候或刷新页面。');return;}
+  stopAudio();
+  const token=runId;
+  try{await readyAudio();if(token!==runId)return;}catch{announce('请再次点击，开启浏览器声音。');return;}
+  playing=true;
+  fullSegmentActive=true;
+  const btn=$('play-full-segment');
+  btn.textContent='■ 停止试听';
+  btn.setAttribute('aria-label','停止试听完整片段');
+  const events=RAW_EVENTS;
+  const startTick=events[0].tick;
+  const secondsPerTick=(60/state.tempo)/(TICKS_PER_QUARTER||384);
+  events.forEach((ev,i)=>{
+    const at=(ev.tick-startTick)*secondsPerTick;
+    const nextTick=i+1<events.length?events[i+1].tick:null;
+    const gapSeconds=nextTick!==null?(nextTick-ev.tick)*secondsPerTick:1.3;
+    const duration=Math.max(.18,Math.min(2.4,gapSeconds*1.2));
+    ev.notes.forEach(n=>playNote(n.note,{at,duration,velocity:Math.max(.4,(n.velocity||90)/110)}));
+    // 踏板变化跟事件一起回放：只在这段真的有踏板数据时才生效，没有踏板数据
+    // 的曲子/范围（比如本课程右手）pedalChange 恒为 false，不会误踩踏板。
+    if(HAS_PEDAL_DATA&&ev.pedalChange)later(()=>pedalSet(ev.pedalDown),Math.max(0,at*1000-5));
+    // 音卡、键盘目标键、指法高亮、谱面光标都跟着这个事件一起变——用户明确要求
+    // "试听的时候也像人在演奏一样变化显示音符"，只出声音、画面不动会显得像
+    // 哑巴钢琴。跟连续演奏模式共用 paintEventNotes，两处画法保持一致。
+    later(()=>{paintEventNotes(ev,i);$('group-label').textContent=`试听完整片段 · 第 ${ev.measure+1} 小节`;centerKeyboard();},at*1000);
+  });
+  const lastEv=events[events.length-1];
+  const totalMs=((lastEv.tick-startTick)*secondsPerTick+1.6)*1000;
+  announce(`正在试听第 ${FROM_MEASURE+1}-${lastEv.measure+1} 小节完整演奏 · 示范速度 ${state.tempo} BPM`);
+  later(()=>{if(token!==runId)return;stopAudio();},totalMs);
+}
 async function listen(notes,separate=false){stopAudio();const token=runId;try{await readyAudio();if(token!==runId)return;notes.forEach((n,i)=>playNote(n,{at:separate?i*.48:0,duration:1.1}));$('audio-status').textContent=(separate?'依次试听：':'同时试听：')+notes.map(name).join(' · ');}catch{announce('声音暂时无法启动，请再次点击试听。');}}
 async function listenOne(note){const wasPedal=manualPedal;if(playing)stopAudio();try{await readyAudio();if(wasPedal)pedalSet(true);playNote(note,{duration:.65});$('audio-status').textContent='正在试听 '+name(note)+(manualPedal?' · 延音踏板已踩下':'');}catch{announce('声音暂时无法启动，请再次点击琴键。');}}
 async function demo(pedalOnly=false){if(playing){stopAudio();return;}stopAudio();const token=runId;try{await readyAudio();if(token!==runId)return;}catch{announce('请再次点击，开启浏览器声音。');return;}playing=true;$('demo').innerHTML='<svg viewBox="0 0 24 24"><path d="M8 6h3v12H8zM15 6h3v12h-3z"/></svg>';$('demo').setAttribute('aria-label','停止示范');$('demo-label').textContent='正在示范 · 点击停止';if(pedalOnly)$('pedal-demo').textContent='□ 停止踏板示范';
@@ -258,10 +312,15 @@ function computeStaffBottomY(steps){
   return (minBound+maxBound)/2; // 音域跨度大到画布放不下时两头各让一点，不让某一端整个消失
 }
 function noteY(step,staffBottomY){return staffBottomY-(step-STAFF_BOTTOM_STEP)*STEP_PX;}
-function drawStaffLines(svg,staffBottomY){
+// endX 原来写死 522（正好配主谱面固定 560 宽的 viewBox）。连续演奏的谱面条
+// 现在会按音符数量变宽（见 drawContinuousScoreStrip），如果谱线还是只画到
+// 522，画布比 522 更宽的那一截就只有音符点、没有谱线托着——2026-09-15 从
+// 用户截图发现这个问题：谱线在滚动到中段之后突然消失。drawScoreInto（单组
+// 放大视图）viewBox 没变，不传这个参数时用回原来的 522，不受影响。
+function drawStaffLines(svg,staffBottomY,endX=522){
   const top=staffBottomY-(STAFF_TOP_STEP-STAFF_BOTTOM_STEP)*STEP_PX;
   svg+=`<path d="M35 ${top}V${staffBottomY}" stroke="#596c63" stroke-width="1.4"/>`;
-  for(let y=top;y<=staffBottomY;y+=16)svg+=`<path d="M35 ${y}H522" stroke="#596c63" stroke-width="1"/>`;
+  for(let y=top;y<=staffBottomY;y+=16)svg+=`<path d="M35 ${y}H${endX}" stroke="#596c63" stroke-width="1"/>`;
   svg+=`<text x="38" y="${CLEF_Y(staffBottomY)}" font-size="${CLEF_FONT_SIZE}" font-family="Segoe UI Symbol, Noto Music, serif" fill="#b6c6b4">${CLEF_CHAR}</text>`;
   return svg;
 }
@@ -281,32 +340,57 @@ function drawScoreInto(targetId,notes,fs,color){
 // 像左手那样区分"低音"和"和弦"的语义色——右手大多是旋律音型，没有那个区分。
 const HAND_TONES = { left: ['#9cbedd', '#c5b1e8'], right: ['#7ec98b', '#bfd9aa'], both: ['#d9bb80', '#e6cfa0'] };
 function drawScore(){const[first,rest]=HAND_TONES[HAND];drawScoreInto('score',currentNotes(),currentFingers(),state.phase===phaseTextFor(group().kind).bassPhaseIndex?first:rest);}
-// 连续演奏用的谱面条：跟 drawScoreInto 不一样，drawScoreInto 只画"当前一个
-// 音组"（分步骤模式一次只练一组，够用）；连续演奏是往下弹的，只看当前这
-// 一个音符不知道接下来是什么，得往后多显示几个事件，才知道"接下来要弹
-// 什么"。当前事件放大、加亮，后面几个缩小、变暗，一眼能分清"现在"和
-// "接下来"。
-function drawContinuousScoreStrip(targetId,events){
+// 连续演奏用的谱面条：原来是"只看接下来几个音符"的滑动小窗口——每弹一个音，
+// 全部音符就重新摆位一次、当前音永远画在同一个固定位置。这样看不出"我在这
+// 一整段里弹到哪儿了"（没有进度感），也看不出前后乐句的疏密对比（没有空间
+// 感），每弹一个音画面都长一个样。改成一次性把这一段全部音符事件铺满整条
+// 谱面，不再是滑动窗口；谱面本身固定不动，只有一根竖线"光标"随 currentIndex
+// 左右移动，弹过的音变暗、还没弹到的音保持正常亮度，一眼能看出整段的长相和
+// 当前进度。staffBottomY 也因此按"这一整段"算一次（不再按每次滑动窗口重算），
+// 谱表位置不会跟着弹动的音符上下跳动。
+// 横向按事件序号等距摆位，不按真实 tick 时间比例——试过按时间比例铺开，结果
+// 长音符（比如左手夜曲式的长踏板低音）之间大段空白，密集的和弦/经过音又全部
+// 挤成一坨，反而比等距更难看清"下一个音在哪"。等距虽然丢了"疏密=时值"的真实
+// 感，但保证任何时候都是均匀分散在整条谱面上，不会出现挤成一团的观感。
+// 音符特别密的曲子（比如一段里塞了几十个经过音）之前会把全部事件硬摊在固定
+// 560 宽的窗口里，音符点本身（直径接近 10px）比算出来的间距还宽，结果一整段
+// 挤成一条实心的黑带，比原来"只看6个事件"的滑动窗口还难看。改成：间距有下限
+// （MIN_STRIP_EVENT_STEP），事件一多就让画布本身变宽，而不是把间距压没——
+// 容器换成横向可滚动（见 style.css），配合下面的自动滚动跟着光标走，长段落
+// 稀疏段落都不会挤/不会看不出进度。
+const MIN_STRIP_EVENT_STEP=18;
+function drawContinuousScoreStrip(targetId,events,currentIndex){
   const staffBottomY=computeStaffBottomY(events.flatMap(e=>e.notes.map(n=>noteStep(n.note))));
-  let svg='<svg viewBox="0 0 560 155" role="img" aria-label="接下来几个音符的谱面对照">';svg=drawStaffLines(svg,staffBottomY);
-  const startX=115,endX=512;
-  const stepX=events.length>1?(endX-startX)/(events.length-1):0;
+  const startX=115,naturalEndX=512;
+  const stepX=events.length>1?Math.max(MIN_STRIP_EVENT_STEP,(naturalEndX-startX)/(events.length-1)):0;
+  const xFor=i=>events.length>1?startX+i*stepX:(startX+naturalEndX)/2;
+  const contentWidth=Math.max(560,startX+(events.length>1?stepX*(events.length-1):0)+25);
+  let svg=`<svg viewBox="0 0 ${contentWidth} 155" width="${contentWidth}" height="155" role="img" aria-label="这一段完整谱面对照，竖线是当前位置">`;svg=drawStaffLines(svg,staffBottomY,contentWidth-10);
   events.forEach((event,i)=>{
-    const x=events.length===1?(startX+endX)/2:startX+i*stepX;
-    const isCurrent=i===0;
-    const color=isCurrent?'#c5b1e8':'#5c6b64';
-    if(isCurrent)svg+=`<rect x="${x-16}" y="30" width="32" height="112" fill="#2f2a3d" opacity=".55" rx="4"/>`;
+    const x=xFor(i);
+    const isCurrent=i===currentIndex;
+    const isPast=i<currentIndex;
+    const color=isCurrent?'#c5b1e8':isPast?'#3b453e':'#5c6b64';
     const notesSorted=[...event.notes].sort((a,b)=>a.note-b.note);
     notesSorted.forEach(n=>{
       const y=Math.max(4,Math.min(150,noteY(noteStep(n.note),staffBottomY)));
-      svg=drawLedgerLines(svg,x,y,staffBottomY,26);
-      const rx=isCurrent?9:6,ry=isCurrent?6:4;
+      svg=drawLedgerLines(svg,x,y,staffBottomY,isCurrent?18:12,isPast?'#333d37':undefined);
+      const rx=isCurrent?7.5:4.6,ry=isCurrent?5.2:3.2;
       svg+=`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-17 ${x} ${y})" fill="${color}"/>`;
     });
     if(isCurrent)svg+=`<text x="${x}" y="145" text-anchor="middle" font-family="system-ui" font-size="11" fill="${color}">${notesSorted.map(n=>name(n.note)).join('·')}</text>`;
   });
+  let cx=null;
+  if(currentIndex>=0&&currentIndex<events.length){
+    cx=xFor(currentIndex);
+    svg+=`<line x1="${cx}" y1="6" x2="${cx}" y2="150" stroke="#c5b1e8" stroke-width="1.6" opacity=".8"/>`;
+  }
   svg+='</svg>';
   $(targetId).innerHTML=svg;
+  // 容器比画布窄时（长段落）滚动到让光标居中，跟 centerKeyboard() 是同一个
+  // "让当前位置留在视野里"的思路；rAF 一拍是因为刚写完 innerHTML，布局要先
+  // 定下来 clientWidth 才准。
+  if(cx!==null)requestAnimationFrame(()=>{const el=$(targetId);if(el)el.scrollLeft=Math.max(0,cx-el.clientWidth/2);});
 }
 function render(){const g=group(),notes=currentNotes(),fs=currentFingers(),text=phaseTextFor(g.kind),bass=state.phase===text.bassPhaseIndex,groupCount=GROUPS.length;$('group-label').textContent=`手型 ${String(state.group+1).padStart(2,'0')} / ${String(groupCount).padStart(2,'0')}`;$('chord-symbol').textContent=g.symbol;$('chord-title').textContent=bass?`先找到${HAND_LABEL}第一个音`:g.title;$('chord-subtitle').textContent=notes.map(name).join(' · ');$('notes-row').innerHTML=notes.map((n,i)=>{const noteHand=g.kind==='duet'?g.handsOf[i]:null;return`<button class="note-card ${bass?'note-bass':''}" data-midi="${n}" aria-label="试听 ${name(n)}，${noteHand?(noteHand==='left'?'左手':'右手'):HAND_LABEL} ${fs[i]} 指，${FINGER_NAMES[fs[i]]}"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}${noteHand?` · ${noteHand==='left'?'L':'R'}`:''}</span></span><span class="finger-circle">${fs[i]}</span></button>`;}).join('');$('note-caption').textContent=bass?'先弹这一个音':`${notes.length===2?'两个':notes.length===1?'这一个':'几个'}音，一起按下`;
   for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=notes.indexOf(n);key.classList.toggle('target',index>=0);key.classList.toggle('bass',bass&&index>=0);key.classList.toggle('ghost',!bass&&n===g.bass);key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;key.setAttribute('aria-label',`试听 ${name(n)}${index>=0?`，${HAND_LABEL} ${fs[index]} 指`:''}`);}
@@ -330,6 +414,7 @@ $('notes-row').addEventListener('click',e=>{const note=e.target.closest('[data-m
 $('score').addEventListener('click',e=>{const note=e.target.closest('[data-midi]');if(note)listenOne(Number(note.dataset.midi));});
 $('score').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const note=e.target.closest('[data-midi]');if(note){e.preventDefault();e.stopPropagation();listenOne(Number(note.dataset.midi));}}});
 $('play-separate').onclick=()=>listen(currentNotes(),true);$('play-together').onclick=()=>listen(currentNotes());$('demo').onclick=()=>demo();$('pedal-demo').onclick=()=>demo(true);$('next').onclick=next;$('previous').onclick=previous;
+$('play-full-segment').onclick=playFullSegment;
 $('loop').onclick=()=>{state.loop=!state.loop;$('loop').setAttribute('aria-pressed',String(state.loop));announce(state.loop?'已开启本组循环。点击停止按钮可随时停下。':'已关闭本组循环。');};
 $('tempo').oninput=e=>{state.tempo=Number(e.target.value);$('tempo-value').value=state.tempo;save();if(playing)stopAudio();};
 $('fingering').onchange=e=>{stopAudio();state.fingering=Number(e.target.value);render();announce('已同步更新音卡、手型与琴键指法。');};
@@ -559,6 +644,24 @@ function showMeasureBanner(measureIndex,isFinal){
   },3000);
 }
 
+// 单个事件的"现在弹的是这个"视觉呈现——连续演奏模式（真实 MIDI 推进）和
+// 试听完整片段（按真实时值自动播放）共用同一套画法，两处都要做到"像有人在
+// 弹"：音卡、键盘目标键、手型示意图手指高亮、整段谱面的光标位置，缺一处
+// 都会显得数据和画面对不上。currentIndex 传给 drawContinuousScoreStrip 定位
+// 光标，不再需要每次单独截取一段事件窗口。
+function paintEventNotes(event,idx){
+  const notesSorted=[...event.notes].sort((a,b)=>a.note-b.note);
+  const pitches=notesSorted.map(n=>n.note);
+  const fs=notesSorted.map(n=>Number.isInteger(n.finger)?n.finger:1);
+  const info=pseudoChordInfo(pitches);
+  $('chord-symbol').textContent=info.symbol;
+  $('chord-title').textContent=info.title;
+  $('chord-subtitle').textContent=pitches.map(name).join(' · ');
+  $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，${HAND_LABEL} ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
+  drawContinuousScoreStrip('continuous-score-strip',RAW_EVENTS,idx);
+  for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=pitches.indexOf(n);key.classList.toggle('target',index>=0);key.classList.remove('bass','ghost');key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;}
+  document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.remove('bass');});
+}
 function renderContinuous(){
   if(!continuousSession)return;
   const result=continuousSession.getResult();
@@ -574,24 +677,14 @@ function renderContinuous(){
     $('note-caption').textContent='已完成';
     $('play-feedback').textContent='✓ 全部弹完了';
     $('notes-row').innerHTML='';
-    $('continuous-score-strip').innerHTML='';
+    drawContinuousScoreStrip('continuous-score-strip',RAW_EVENTS,RAW_EVENTS.length);
     for(const key of $('keyboard').children)key.classList.remove('target','bass','ghost');
     document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>el.classList.remove('active','bass'));
     return;
   }
-  const notesSorted=[...event.notes].sort((a,b)=>a.note-b.note);
-  const pitches=notesSorted.map(n=>n.note);
-  const fs=notesSorted.map(n=>Number.isInteger(n.finger)?n.finger:1);
-  const info=pseudoChordInfo(pitches);
-  $('chord-symbol').textContent=info.symbol;
-  $('chord-title').textContent=info.title;
-  $('chord-subtitle').textContent=pitches.map(name).join(' · ');
-  $('note-caption').textContent=`${pitches.length===1?'这一个':pitches.length===2?'两个':'几个'}音，弹对自动前进`;
+  paintEventNotes(event,idx);
+  $('note-caption').textContent=`${event.notes.length===1?'这一个':event.notes.length===2?'两个':'几个'}音，弹对自动前进`;
   $('play-feedback').textContent='跟着弹，弹对自动前进，弹错会标红提示';
-  $('notes-row').innerHTML=pitches.map((n,i)=>`<button class="note-card" data-midi="${n}" aria-label="${name(n)}，${HAND_LABEL} ${fs[i]} 指"><span class="note-label">${pitch(n)}<sub>${octave(n)}</sub><span class="note-cn">${CN[((n%12)+12)%12]} · ${FINGER_NAMES[fs[i]]}</span></span><span class="finger-circle">${fs[i]}</span></button>`).join('');
-  drawContinuousScoreStrip('continuous-score-strip',RAW_EVENTS.slice(idx,idx+6));
-  for(const key of $('keyboard').children){const n=Number(key.dataset.midi),index=pitches.indexOf(n);key.classList.toggle('target',index>=0);key.classList.remove('bass','ghost');key.innerHTML=(index>=0?`<span class="key-finger">${fs[index]}</span>`:'')+`<span class="key-note">${name(n)}</span>`;}
-  document.querySelectorAll('#hand-svg [data-finger]').forEach(el=>{el.classList.toggle('active',fs.includes(Number(el.dataset.finger)));el.classList.remove('bass');});
 }
 
 function enterContinuousMode(){
